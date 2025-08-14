@@ -1,0 +1,38 @@
+{
+  "env": {
+    "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "32000"
+  },
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.littlewordsproject.com)",
+      "Bash(npx create-react-app:*)",
+      "Bash(npm create:*)",
+      "Bash(rm:*)",
+      "Bash(npm install)",
+      "Bash(mkdir:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npx vite:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm start)",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:res.cloudinary.com)",
+      "Bash(chmod:*)",
+      "Bash(./download-letters.sh:*)",
+      "Bash(./download-remaining.sh)",
+      "Bash(grep:*)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "WebFetch(domain:cld.accentuate.io)",
+      "WebFetch(domain:localhost)",
+      "Bash(git revert:*)",
+      "Bash(git reset:*)",
+      "Bash(git tag:*)",
+      "Bash(git checkout:*)"
+    ],
+    "deny": [],
+    "defaultMode": "acceptEdits"
+  }
+}
