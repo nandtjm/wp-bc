@@ -508,10 +508,25 @@ class Bracelet_Customizer_Rest_API {
             return new WP_Error('save_failed', 'Failed to save customization: ' . $wpdb->last_error, ['status' => 500]);
         }
         
+        // Get the actual ID from the database
+        $saved_id = $wpdb->insert_id;
+        
+        // If insert_id is 0 (which happens with REPLACE on existing records), 
+        // find the record by session_id
+        if (!$saved_id) {
+            $saved_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM $table_name WHERE session_id = %s ORDER BY created_at DESC LIMIT 1",
+                $session_id
+            ));
+        }
+        
+        // Final fallback - use session_id if we still don't have a numeric ID
+        $final_id = $saved_id ? $saved_id : $session_id;
+        
         return rest_ensure_response([
             'success' => true,
             'session_id' => $session_id,
-            'id' => $wpdb->insert_id ?: $session_id
+            'id' => $final_id
         ]);
     }
     
