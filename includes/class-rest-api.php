@@ -129,7 +129,7 @@ class Bracelet_Customizer_Rest_API {
                 $available_sizes = [];
                 $size_attribute = $product->get_attribute('pa_size') ?: $product->get_attribute('size');
                 if ($size_attribute) {
-                    $available_sizes = array_map('trim', explode(',', $size_attribute));
+                    $available_sizes = array_map('trim', explode('|', $size_attribute));
                 } else {
                     // Fallback to default sizes if no attribute is set
                     $available_sizes = ['XS', 'S/M', 'M/L', 'L/XL'];
@@ -432,27 +432,112 @@ class Bracelet_Customizer_Rest_API {
     public function save_customization($request) {
         global $wpdb;
         
-        $session_id = $request->get_param('session_id');
-        $product_id = $request->get_param('product_id');
-        $customization_data = $request->get_param('customization_data');
+        // Try to get JSON params first, fallback to individual params
+        $json_params = $request->get_json_params();
+        $body_params = $request->get_body_params();
         
-        if (!$session_id || !$product_id || !$customization_data) {
-            return new WP_Error('missing_data', 'Missing required data', ['status' => 400]);
+        // Merge all possible parameter sources
+        $params = array_merge(
+            (array) $json_params,
+            (array) $body_params,
+            $request->get_params()
+        );
+        
+        // Extract session_id, product_id, and customization_data
+        $session_id = isset($params['session_id']) ? $params['session_id'] : null;
+        $product_id = isset($params['product_id']) ? $params['product_id'] : null;
+        $customization_data = isset($params['customization_data']) ? $params['customization_data'] : null;
+        
+        // If customization_data is not provided as a structured object,
+        // build it from flat fields (bracelet_style, word, etc.)
+        if (!$customization_data && isset($params['bracelet_style'])) {
+            $customization_data = [
+                'bracelet_style' => $params['bracelet_style'] ?? '',
+                'word' => $params['word'] ?? '',
+                'letter_color' => $params['letter_color'] ?? $params['letterColor'] ?? 'white',
+                'selected_charms' => $params['selected_charms'] ?? $params['selectedCharms'] ?? [],
+                'size' => $params['size'] ?? 'M/L',
+                'quantity' => $params['quantity'] ?? 1
+            ];
+        }
+        
+        // If product_id is not provided but we have bracelet_style, try to derive it
+        if (!$product_id && isset($params['bracelet_style'])) {
+            // For now, use bracelet_style as product identifier
+            // In a real implementation, you might want to look up the actual WooCommerce product ID
+            $product_id = $params['bracelet_style'];
+        }
+        
+        // Generate session_id if not provided
+        if (!$session_id) {
+            $session_id = 'session_' . wp_generate_uuid4();
+        }
+        
+        // Validate required data
+        if (!$product_id || !$customization_data) {
+            return new WP_Error('missing_data', 'Missing required data: product_id and customization_data are required', [
+                'status' => 400,
+                'received_params' => array_keys($params),
+                'session_id' => $session_id,
+                'product_id' => $product_id,
+                'has_customization_data' => !empty($customization_data)
+            ]);
+        }
+        
+        // Ensure customization_data is an array for JSON encoding
+        if (is_string($customization_data)) {
+            $decoded = json_decode($customization_data, true);
+            if (json_last_error() === JSON_ERROR_NONE) {
+                $customization_data = $decoded;
+            }
         }
         
         $table_name = $wpdb->prefix . 'bracelet_customizations';
         
+        // Create table if it doesn't exist
+        $this->ensure_customization_table_exists();
+        
         $result = $wpdb->replace($table_name, [
             'session_id' => sanitize_text_field($session_id),
-            'product_id' => intval($product_id),
-            'customization_data' => wp_json_encode($customization_data)
+            'product_id' => sanitize_text_field($product_id),
+            'customization_data' => wp_json_encode($customization_data),
+            'created_at' => current_time('mysql')
         ]);
         
         if ($result === false) {
-            return new WP_Error('save_failed', 'Failed to save customization', ['status' => 500]);
+            return new WP_Error('save_failed', 'Failed to save customization: ' . $wpdb->last_error, ['status' => 500]);
         }
         
-        return rest_ensure_response(['success' => true]);
+        return rest_ensure_response([
+            'success' => true,
+            'session_id' => $session_id,
+            'id' => $wpdb->insert_id ?: $session_id
+        ]);
+    }
+    
+    /**
+     * Ensure customization table exists
+     */
+    private function ensure_customization_table_exists() {
+        global $wpdb;
+        
+        $table_name = $wpdb->prefix . 'bracelet_customizations';
+        
+        $charset_collate = $wpdb->get_charset_collate();
+        
+        $sql = "CREATE TABLE $table_name (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            session_id varchar(255) NOT NULL,
+            product_id varchar(255) NOT NULL,
+            customization_data longtext NOT NULL,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            KEY session_id (session_id),
+            KEY product_id (product_id)
+        ) $charset_collate;";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
     }
     
     /**
