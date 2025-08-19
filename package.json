@@ -1,0 +1,13 @@
+{
+  "name": "exp-bracelets-customizer",
+  "version": "1.0.0",
+  "description": "WordPress plugin for bracelet customization with React integration",
+  "scripts": {
+    "build": "node build-integration.js",
+    "dev": "node watch-dev.js",
+    "setup": "cd bracelet-customizer && npm install && cd .. && npm run build"
+  },
+  "devDependencies": {
+    "chokidar": "^3.5.3"
+  }
+}

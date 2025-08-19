@@ -30,9 +30,23 @@
       "Bash(git revert:*)",
       "Bash(git reset:*)",
       "Bash(git tag:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(npm run:*)",
+      "Bash(open http://localhost:3000)",
+      "Bash(find:*)",
+      "Bash(php:*)",
+      "Bash(cp:*)",
+      "Bash(for style in gold-plated amethyst-dreams rose-gold)",
+      "Bash(do for i in {2..13})",
+      "Bash(do cp \"bluestone-$ichar.webp\" \"$style-$ichar.webp\")",
+      "Bash(done)",
+      "Bash(wp post list:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "acceptEdits",
+    "additionalDirectories": [
+      "/Users/nandlal"
+    ]
   }
 }
