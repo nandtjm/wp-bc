@@ -397,24 +397,38 @@ class Bracelet_Customizer_Product_Types {
         ?>
         <script type="text/javascript">
         jQuery(document).ready(function($) {
-            // Show/hide tabs based on product type
-            function toggleProductTypeTabs() {
-                var productType = $('#product-type').val();
-                
-                // Hide all custom tabs
-                $('.charm_config_tab').hide();
-                $('.show_if_standard_bracelet, .show_if_charm, .show_if_bracelet_collabs').hide();
-                
-                // Show relevant tabs
-                if (productType === 'standard_bracelet') {
-                    $('.show_if_standard_bracelet').show();
-                } else if (productType === 'bracelet_collabs') {
-                    $('.show_if_bracelet_collabs').show();
-                } else if (productType === 'charm') {
-                    $('.charm_config_tab').show();
-                    $('.show_if_charm').show();
-                }
-            }
+			// Show/hide tabs based on product type
+			function toggleProductTypeTabs() {
+				var productType = $('#product-type').val();
+				
+				// Hide all custom tabs
+				$('.charm_config_tab').hide();
+				$('.show_if_standard_bracelet, .show_if_charm, .show_if_bracelet_collabs').hide();
+				
+				// For all custom product types, show general tab fields (like simple products)
+				if (productType === 'standard_bracelet' || productType === 'charm' || productType === 'bracelet_collabs') {
+					$('.general_options').show();
+					$('.show_if_simple').show();
+					$('.pricing').show();
+					$('._regular_price_field, ._sale_price_field').show();
+					$('.sale_price_dates_fields').show();
+					
+					// Hide Virtual and Downloadable checkboxes for custom product types
+					$('label[for="_virtual"], label[for="_downloadable"]').hide();
+					$('._virtual_field, ._downloadable_field').hide();
+					$('.show_if_virtual, .show_if_downloadable').hide();
+				}
+				
+				// Show relevant tabs
+				if (productType === 'standard_bracelet') {
+					$('.show_if_standard_bracelet').show();
+				} else if (productType === 'bracelet_collabs') {
+					$('.show_if_bracelet_collabs').show();
+				} else if (productType === 'charm') {
+					$('.charm_config_tab').show();
+					$('.show_if_charm').show();
+				}
+			}
             
             // Initial toggle
             toggleProductTypeTabs();
