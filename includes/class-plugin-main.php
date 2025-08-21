@@ -304,7 +304,7 @@ class Bracelet_Customizer_Main {
         // Load on single product pages with bracelet products
         if (is_product()) {
             global $product;
-            if ($product && has_term('standard_bracelet', 'product_type', $product->get_id())) {
+            if ($product && (has_term('standard_bracelet', 'product_type', $product->get_id()) || has_term('bracelet_collabs', 'product_type', $product->get_id()))) {
                 return true;
             }
         }
@@ -437,6 +437,8 @@ class Bracelet_Customizer_Main {
             return 'WC_Product_Standard_Bracelet';
         } elseif ($product_type === 'charm') {
             return 'WC_Product_Charm';
+        } elseif ($product_type === 'bracelet_collabs') {
+            return 'WC_Product_Bracelet_Collabs';
         }
         return $classname;
     }
@@ -447,7 +449,7 @@ class Bracelet_Customizer_Main {
     public function product_type_options($options) {
         $options['bracelet_customizable'] = [
             'id' => '_bracelet_customizable',
-            'wrapper_class' => 'show_if_standard_bracelet',
+            'wrapper_class' => 'show_if_standard_bracelet show_if_bracelet_collabs',
             'label' => __('Customizable', 'bracelet-customizer'),
             'description' => __('Enable bracelet customization for this product', 'bracelet-customizer'),
             'default' => 'yes'

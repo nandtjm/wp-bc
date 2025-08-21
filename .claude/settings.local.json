@@ -41,7 +41,8 @@
       "Bash(do cp \"bluestone-$ichar.webp\" \"$style-$ichar.webp\")",
       "Bash(done)",
       "Bash(wp post list:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(wp post meta get:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

@@ -757,7 +757,12 @@ class Bracelet_Customizer_Settings {
             
             // Price field
             echo '<label>' . __('Additional Price:', 'bracelet-customizer') . '</label><br>';
-            echo '<input type="number" name="' . esc_attr($this->option_name . '[letter_colors][' . $color_id . '][price]') . '" value="' . esc_attr($color_data['price']) . '" min="0" step="0.01" class="small-text" /> ' . get_woocommerce_currency_symbol();
+            echo '<input type="number" name="' . esc_attr($this->option_name . '[letter_colors][' . $color_id . '][price]') . '" value="' . esc_attr($color_data['price']) . '" min="0" step="0.01" class="small-text" /> ' . get_woocommerce_currency_symbol() . '<br><br>';
+            
+            // Color picker field
+            echo '<label>' . __('Color:', 'bracelet-customizer') . '</label><br>';
+            $color_value = isset($color_data['color']) ? $color_data['color'] : '#ffffff';
+            echo '<input type="text" name="' . esc_attr($this->option_name . '[letter_colors][' . $color_id . '][color]') . '" value="' . esc_attr($color_value) . '" class="color-picker-field" data-default-color="' . esc_attr($color_value) . '" />';
             
             echo '</div>';
         }
@@ -898,7 +903,7 @@ class Bracelet_Customizer_Settings {
         
         wp_add_inline_script('wp-color-picker', '
             jQuery(document).ready(function($) {
-                $(".color-picker").wpColorPicker();
+                $(".color-picker-field").wpColorPicker();
                 
                 // Reset settings
                 $("#reset-settings").click(function() {

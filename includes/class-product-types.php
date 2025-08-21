@@ -59,6 +59,7 @@ class Bracelet_Customizer_Product_Types {
     private function include_product_classes() {
         require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/product-types/class-wc-product-standard-bracelet.php';
         require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/product-types/class-wc-product-charm.php';
+        require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/product-types/class-wc-product-bracelet-collabs.php';
     }
     
     /**
@@ -81,6 +82,7 @@ class Bracelet_Customizer_Product_Types {
      */
     public function add_product_type_selector($types) {
         $types['standard_bracelet'] = __('Standard Bracelet', 'bracelet-customizer');
+        $types['bracelet_collabs'] = __('Bracelet Collabs', 'bracelet-customizer');
         $types['charm'] = __('Charm', 'bracelet-customizer');
         
         return $types;
@@ -98,6 +100,14 @@ class Bracelet_Customizer_Product_Types {
             'priority' => 21
         ];
         
+        // Bracelet Collabs Configuration Tab
+        $tabs['bracelet_collabs_config'] = [
+            'label' => __('Collabs Config', 'bracelet-customizer'),
+            'target' => 'bracelet_collabs_config_data',
+            'class' => ['show_if_bracelet_collabs'],
+            'priority' => 21
+        ];
+        
         return $tabs;
     }
     
@@ -109,7 +119,7 @@ class Bracelet_Customizer_Product_Types {
         
         // Charm Configuration Panel
         ?>
-        <div id="charm_config_data" class="panel woocommerce_options_panel">
+        <div id="charm_config_data" class="panel woocommerce_options_panel hidden">
             <div class="options_group">
                 <h4><?php _e('Charm Configuration', 'bracelet-customizer'); ?></h4>
                 
@@ -174,8 +184,51 @@ class Bracelet_Customizer_Product_Types {
                 );
                 
                 echo '</div>';
+                ?>
+            </div>
+        </div>
+        
+        <!-- Bracelet Collabs Configuration Panel -->
+        <div id="bracelet_collabs_config_data" class="panel woocommerce_options_panel hidden">
+            <div class="options_group">
+                <h4><?php _e('Bracelet Collabs Configuration', 'bracelet-customizer'); ?></h4>
+                
+                <?php
+                // Get current values
+                $collabs_image_id = get_post_meta($post->ID, '_collabs_main_image', true);
+                $collabs_url = get_post_meta($post->ID, '_collabs_main_url', true);
+                
+                // Auto-fill URL if image is uploaded but URL is empty
+                if ($collabs_image_id && empty($collabs_url)) {
+                    $collabs_url = wp_get_attachment_url($collabs_image_id);
+                }
+                
+                echo '<div class="collabs-image-group" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;">';
+                echo '<h4 style="margin: 0 0 10px 0;">' . __('Bracelet Collabs Image', 'bracelet-customizer') . '</h4>';
+                
+                // Image URL field
+                woocommerce_wp_text_input([
+                    'id' => '_collabs_main_url',
+                    'label' => __('Collabs Image URL', 'bracelet-customizer'),
+                    'description' => __('Image URL (auto-filled when uploaded via WordPress, or enter external CDN/Cloud URL)', 'bracelet-customizer'),
+                    'desc_tip' => true,
+                    'value' => $collabs_url,
+                    'wrapper_class' => 'form-row form-row-wide',
+                    'type' => 'url',
+                    'custom_attributes' => [
+                        'placeholder' => 'https://example.com/collabs-bracelet.webp',
+                        'data-auto-fill-field' => '_collabs_main_image'
+                    ]
+                ]);
+                
+                // Image upload field
+                $this->render_image_field(
+                    $post->ID, 
+                    '_collabs_main_image', 
+                    __('Upload Collabs Image', 'bracelet-customizer')
+                );
+                
                 echo '</div>';
-
                 ?>
             </div>
         </div>
@@ -235,6 +288,26 @@ class Bracelet_Customizer_Product_Types {
             }
         }
         
+        // Save Bracelet Collabs data
+        if (isset($_POST['_collabs_main_image'])) {
+            update_post_meta($post_id, '_collabs_main_image', sanitize_text_field($_POST['_collabs_main_image']));
+        }
+        
+        if (isset($_POST['_collabs_main_url'])) {
+            update_post_meta($post_id, '_collabs_main_url', esc_url_raw($_POST['_collabs_main_url']));
+        }
+        
+        // Auto-fill URL when collabs image is uploaded
+        $collabs_image_id = isset($_POST['_collabs_main_image']) ? $_POST['_collabs_main_image'] : '';
+        $collabs_url = isset($_POST['_collabs_main_url']) ? $_POST['_collabs_main_url'] : '';
+        
+        if ($collabs_image_id && empty($collabs_url)) {
+            $auto_url = wp_get_attachment_url($collabs_image_id);
+            if ($auto_url) {
+                update_post_meta($post_id, '_collabs_main_url', $auto_url);
+            }
+        }
+        
         // Save position images
         $position_images = [];
         for ($i = 1; $i <= 9; $i++) {
@@ -256,6 +329,8 @@ class Bracelet_Customizer_Product_Types {
         $external_url = '';
         if ($meta_key === '_charm_main_image') {
             $external_url = get_post_meta($product_id, '_charm_main_url', true);
+        } elseif ($meta_key === '_collabs_main_image') {
+            $external_url = get_post_meta($product_id, '_collabs_main_url', true);
         }
         
         // Determine which image to show (external URL takes precedence)
@@ -328,11 +403,13 @@ class Bracelet_Customizer_Product_Types {
                 
                 // Hide all custom tabs
                 $('.charm_config_tab').hide();
-                $('.show_if_standard_bracelet, .show_if_charm').hide();
+                $('.show_if_standard_bracelet, .show_if_charm, .show_if_bracelet_collabs').hide();
                 
                 // Show relevant tabs
                 if (productType === 'standard_bracelet') {
                     $('.show_if_standard_bracelet').show();
+                } else if (productType === 'bracelet_collabs') {
+                    $('.show_if_bracelet_collabs').show();
                 } else if (productType === 'charm') {
                     $('.charm_config_tab').show();
                     $('.show_if_charm').show();
@@ -435,6 +512,8 @@ class Bracelet_Customizer_Product_Types {
     public function woocommerce_product_class($classname, $product_type) {
         if ($product_type === 'standard_bracelet') {
             return 'WC_Product_Standard_Bracelet';
+        } elseif ($product_type === 'bracelet_collabs') {
+            return 'WC_Product_Bracelet_Collabs';
         } elseif ($product_type === 'charm') {
             return 'WC_Product_Charm';
         }

@@ -66,6 +66,13 @@ class Bracelet_Customizer_Rest_API {
             'callback' => [$this, 'save_customization'],
             'permission_callback' => [$this, 'check_permission']
         ]);
+        
+        // Upload preview image
+        register_rest_route(self::NAMESPACE, '/preview-image', [
+            'methods' => 'POST',
+            'callback' => [$this, 'upload_preview_image'],
+            'permission_callback' => [$this, 'check_permission']
+        ]);
     }
     
     /**
@@ -86,7 +93,7 @@ class Bracelet_Customizer_Rest_API {
                 ]);
             }
             
-            // Query WooCommerce products with Standard Bracelet type
+            // Query WooCommerce products with Standard Bracelet and Bracelet Collabs types
             $args = [
                 'post_type' => 'product',
                 'post_status' => 'publish',
@@ -95,7 +102,8 @@ class Bracelet_Customizer_Rest_API {
                     [
                         'taxonomy' => 'product_type',
                         'field' => 'slug',
-                        'terms' => 'standard_bracelet'
+                        'terms' => ['standard_bracelet', 'bracelet_collabs'],
+                        'operator' => 'IN'
                     ]
                 ]
             ];
@@ -121,6 +129,11 @@ class Bracelet_Customizer_Rest_API {
                 $product = wc_get_product($product_post->ID);
                 if (!$product) continue;
                 
+                // Determine product type and category
+                $product_type = $product->get_type();
+                $is_collabs = ($product_type === 'bracelet_collabs');
+                
+                
                 // Get product meta data
                 $bracelet_id = get_post_meta($product->get_id(), '_bracelet_id', true) ?: sanitize_title($product->get_name());
                 $is_best_seller = get_post_meta($product->get_id(), '_is_best_seller', true) === 'yes';
@@ -137,18 +150,36 @@ class Bracelet_Customizer_Rest_API {
                 
                 // Get main bracelet image
                 $main_image = '';
-                $main_image_id = get_post_meta($product->get_id(), '_bracelet_main_image', true);
-                if ($main_image_id) {
-                    $main_image = wp_get_attachment_url($main_image_id);
+                if ($is_collabs) {
+                    // For collabs products, use collabs-specific fields
+                    $collabs_url = get_post_meta($product->get_id(), '_collabs_main_url', true);
+                    $collabs_image_id = get_post_meta($product->get_id(), '_collabs_main_image', true);
+                    
+                    if (!empty($collabs_url)) {
+                        $main_image = $collabs_url;
+                    } elseif ($collabs_image_id) {
+                        $main_image = wp_get_attachment_url($collabs_image_id);
+                    } else {
+                        // Fallback to product featured image
+                        $main_image = wp_get_attachment_url($product->get_image_id());
+                    }
                 } else {
-                    // Fallback to product featured image
-                    $main_image = wp_get_attachment_url($product->get_image_id());
+                    // For standard bracelets, use standard fields
+                    $main_image_id = get_post_meta($product->get_id(), '_bracelet_main_image', true);
+                    if ($main_image_id) {
+                        $main_image = wp_get_attachment_url($main_image_id);
+                    } else {
+                        // Fallback to product featured image
+                        $main_image = wp_get_attachment_url($product->get_image_id());
+                    }
                 }
                 
                 // Get gap images (space images for different character counts)
+                // Skip for collabs products as they don't use gap images
                 $gap_images = [];
                 $gap_data = [];
-                for ($i = 2; $i <= 13; $i++) {
+                if (!$is_collabs) {
+                    for ($i = 2; $i <= 13; $i++) {
                     $gap_image_id = get_post_meta($product->get_id(), "_bracelet_gap_image_{$i}char", true);
                     $gap_url = get_post_meta($product->get_id(), "_bracelet_gap_url_{$i}char", true);
                     
@@ -171,33 +202,37 @@ class Bracelet_Customizer_Rest_API {
                         'uploaded_image_id' => $gap_image_id ?: '',
                         'uploaded_image_url' => $gap_image_id ? wp_get_attachment_url($gap_image_id) : ''
                     ];
+                    }
                 }
                 
-                // Get main charm image
+                // Get main charm image and space stone images
+                // Skip for collabs products as they don't use these features
                 $main_charm_image = '';
                 $main_charm_data = [];
-                $main_charm_image_id = get_post_meta($product->get_id(), '_bracelet_main_charm_image', true);
-                $main_charm_url = get_post_meta($product->get_id(), '_bracelet_main_charm_url', true);
-                
-                // Determine the final main charm image URL (URL field takes precedence)
-                if (!empty($main_charm_url)) {
-                    $main_charm_image = $main_charm_url;
-                } elseif ($main_charm_image_id) {
-                    $main_charm_image = wp_get_attachment_url($main_charm_image_id);
-                }
-                
-                // Store detailed main charm data
-                $main_charm_data = [
-                    'image_url' => $main_charm_image,
-                    'url_field' => $main_charm_url ?: '',
-                    'uploaded_image_id' => $main_charm_image_id ?: '',
-                    'uploaded_image_url' => $main_charm_image_id ? wp_get_attachment_url($main_charm_image_id) : ''
-                ];
-                
-                // Get space stone images for all positions and formats
                 $space_stone_images = [];
                 $space_stone_data = [];
-                for ($position = 1; $position <= 13; $position++) {
+                
+                if (!$is_collabs) {
+                    $main_charm_image_id = get_post_meta($product->get_id(), '_bracelet_main_charm_image', true);
+                    $main_charm_url = get_post_meta($product->get_id(), '_bracelet_main_charm_url', true);
+                    
+                    // Determine the final main charm image URL (URL field takes precedence)
+                    if (!empty($main_charm_url)) {
+                        $main_charm_image = $main_charm_url;
+                    } elseif ($main_charm_image_id) {
+                        $main_charm_image = wp_get_attachment_url($main_charm_image_id);
+                    }
+                    
+                    // Store detailed main charm data
+                    $main_charm_data = [
+                        'image_url' => $main_charm_image,
+                        'url_field' => $main_charm_url ?: '',
+                        'uploaded_image_id' => $main_charm_image_id ?: '',
+                        'uploaded_image_url' => $main_charm_image_id ? wp_get_attachment_url($main_charm_image_id) : ''
+                    ];
+                    
+                    // Get space stone images for all positions and formats
+                    for ($position = 1; $position <= 13; $position++) {
                     $position_padded = str_pad($position, 2, '0', STR_PAD_LEFT);
                     $formats = ['O', 'E'];
                     
@@ -233,6 +268,7 @@ class Bracelet_Customizer_Rest_API {
                         ];
                     }
                 }
+                } // Close if (!$is_collabs) condition for space stone processing
                 
                 $bracelets[] = [
                     'id' => $bracelet_id,
@@ -249,7 +285,7 @@ class Bracelet_Customizer_Rest_API {
                     'spaceStoneData' => $space_stone_data,
                     'availableSizes' => $available_sizes,
                     'isBestSeller' => $is_best_seller,
-                    'category' => 'standard',
+                    'category' => $is_collabs ? 'collabs' : 'standard',
                     'slug' => $product->get_slug(),
                     'sku' => $product->get_sku()
                 ];
@@ -263,11 +299,19 @@ class Bracelet_Customizer_Rest_API {
                 $source = 'woocommerce';
             }
             
+            // Debug: Get categories for debugging
+            $categories = array_unique(array_column($bracelets, 'category'));
+            
             return rest_ensure_response([
                 'success' => true,
                 'data' => $bracelets,
                 'source' => $source,
-                'total' => count($bracelets)
+                'total' => count($bracelets),
+                'categories' => $categories,
+                'debug' => [
+                    'collabs_count' => count(array_filter($bracelets, function($b) { return $b['category'] === 'collabs'; })),
+                    'standard_count' => count(array_filter($bracelets, function($b) { return $b['category'] === 'standard'; }))
+                ]
             ]);
             
         } catch (Exception $e) {
@@ -553,6 +597,54 @@ class Bracelet_Customizer_Rest_API {
         
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+    }
+    
+    /**
+     * Upload preview image from React app
+     */
+    public function upload_preview_image($request) {
+        $customization_id = $request->get_param('customization_id');
+        $image_data = $request->get_param('image_data'); // Base64 image data
+        
+        if (!$customization_id || !$image_data) {
+            return new WP_Error('missing_data', 'Missing customization_id or image_data', ['status' => 400]);
+        }
+        
+        // Decode base64 image
+        $image_parts = explode(';base64,', $image_data);
+        if (count($image_parts) < 2) {
+            return new WP_Error('invalid_image', 'Invalid image data format', ['status' => 400]);
+        }
+        
+        $image_base64 = base64_decode($image_parts[1]);
+        if (!$image_base64) {
+            return new WP_Error('decode_failed', 'Failed to decode image data', ['status' => 400]);
+        }
+        
+        // Create upload directory
+        $upload_dir = wp_upload_dir();
+        $custom_images_dir = $upload_dir['basedir'] . '/bracelet-customizations/';
+        $custom_images_url = $upload_dir['baseurl'] . '/bracelet-customizations/';
+        
+        if (!file_exists($custom_images_dir)) {
+            wp_mkdir_p($custom_images_dir);
+        }
+        
+        // Save image
+        $image_filename = 'preview_' . $customization_id . '.png';
+        $image_path = $custom_images_dir . $image_filename;
+        $image_url = $custom_images_url . $image_filename;
+        
+        $result = file_put_contents($image_path, $image_base64);
+        if (!$result) {
+            return new WP_Error('save_failed', 'Failed to save image', ['status' => 500]);
+        }
+        
+        return rest_ensure_response([
+            'success' => true,
+            'image_url' => $image_url,
+            'customization_id' => $customization_id
+        ]);
     }
     
     /**

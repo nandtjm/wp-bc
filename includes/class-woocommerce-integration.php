@@ -36,6 +36,17 @@ class Bracelet_Customizer_WooCommerce {
         add_filter('woocommerce_get_item_data', [$this, 'display_customization_in_cart'], 10, 2);
         add_action('woocommerce_cart_item_name', [$this, 'add_customization_to_cart_item'], 10, 3);
         
+        // Price modification hooks
+        add_action('woocommerce_before_calculate_totals', [$this, 'modify_cart_item_price']);
+        
+        // Cart image hooks
+        add_filter('woocommerce_cart_item_thumbnail', [$this, 'custom_cart_item_thumbnail'], 10, 3);
+        add_filter('woocommerce_admin_order_item_thumbnail', [$this, 'custom_order_item_thumbnail'], 10, 3);
+        
+        // Checkout and email image hooks
+        add_filter('woocommerce_order_item_thumbnail', [$this, 'custom_order_item_thumbnail'], 10, 3);
+        add_filter('woocommerce_email_order_item_thumbnail', [$this, 'custom_email_order_item_thumbnail'], 10, 3);
+        
         // Order hooks
         add_action('woocommerce_checkout_create_order_line_item', [$this, 'add_customization_to_order_item'], 10, 4);
         add_action('woocommerce_order_item_meta_end', [$this, 'display_customization_in_order'], 10, 3);
@@ -47,6 +58,10 @@ class Bracelet_Customizer_WooCommerce {
         // AJAX hooks
         add_action('wp_ajax_add_custom_bracelet_to_cart', [$this, 'ajax_add_to_cart']);
         add_action('wp_ajax_nopriv_add_custom_bracelet_to_cart', [$this, 'ajax_add_to_cart']);
+        
+        // New AJAX hooks for React app
+        add_action('wp_ajax_bracelet_add_to_cart', [$this, 'ajax_add_to_cart_v2']);
+        add_action('wp_ajax_nopriv_bracelet_add_to_cart', [$this, 'ajax_add_to_cart_v2']);
     }
     
     /**
@@ -98,6 +113,8 @@ class Bracelet_Customizer_WooCommerce {
             if ($customization) {
                 $cart_item_data['bracelet_customization'] = $customization;
                 $cart_item_data['unique_key'] = md5(microtime().rand());
+                
+                // Note: Custom image URL will be provided by the React app in the future
             }
         }
         
@@ -110,6 +127,10 @@ class Bracelet_Customizer_WooCommerce {
     public function get_cart_item_from_session($item, $values, $key) {
         if (array_key_exists('bracelet_customization', $values)) {
             $item['bracelet_customization'] = $values['bracelet_customization'];
+        }
+        
+        if (array_key_exists('custom_image_url', $values)) {
+            $item['custom_image_url'] = $values['custom_image_url'];
         }
         
         return $item;
@@ -136,8 +157,10 @@ class Bracelet_Customizer_WooCommerce {
                 ];
             }
             
-            if (isset($customization['selectedCharms']) && !empty($customization['selectedCharms'])) {
-                $charm_names = array_column($customization['selectedCharms'], 'name');
+            // Handle both possible charm field names
+            $selected_charms = $customization['selectedCharms'] ?? $customization['selected_charms'] ?? [];
+            if (!empty($selected_charms)) {
+                $charm_names = array_column($selected_charms, 'name');
                 $item_data[] = [
                     'key' => __('Charms', 'bracelet-customizer'),
                     'value' => implode(', ', $charm_names)
@@ -153,6 +176,44 @@ class Bracelet_Customizer_WooCommerce {
         }
         
         return $item_data;
+    }
+    
+    /**
+     * Modify cart item price based on customization
+     */
+    public function modify_cart_item_price($cart) {
+        if (is_admin() && !defined('DOING_AJAX')) {
+            return;
+        }
+
+        foreach ($cart->get_cart() as $cart_item_key => $cart_item) {
+            if (isset($cart_item['bracelet_customization'])) {
+                $customization = $cart_item['bracelet_customization'];
+                $product = $cart_item['data'];
+                $base_price = $product->get_regular_price();
+                $additional_price = 0;
+
+                // Add letter color pricing (gold letters cost extra)
+                $letter_color = $customization['letter_color'] ?? $customization['letterColor'] ?? 'white';
+                if ($letter_color === 'gold') {
+                    $additional_price += 15; // Gold letters cost $15 extra
+                }
+
+                // Add charm pricing
+                $selected_charms = $customization['selected_charms'] ?? $customization['selectedCharms'] ?? [];
+                foreach ($selected_charms as $charm) {
+                    if (isset($charm['price'])) {
+                        $additional_price += (float) $charm['price'];
+                    }
+                }
+
+                // Set the new price
+                if ($additional_price > 0) {
+                    $new_price = $base_price + $additional_price;
+                    $product->set_price($new_price);
+                }
+            }
+        }
     }
     
     /**
@@ -176,6 +237,11 @@ class Bracelet_Customizer_WooCommerce {
             
             // Add as order item meta
             $item->add_meta_data('_bracelet_customization', $customization);
+            
+            // Save custom image URL if available
+            if (isset($values['custom_image_url'])) {
+                $item->add_meta_data('_custom_image_url', $values['custom_image_url']);
+            }
             
             // Add individual meta for easy access
             if (isset($customization['word'])) {
@@ -299,6 +365,193 @@ class Bracelet_Customizer_WooCommerce {
             wp_send_json_error(['message' => __('Failed to add bracelet to cart.', 'bracelet-customizer')]);
         }
     }
+    
+    /**
+     * AJAX add to cart (v2 for React app)
+     */
+    public function ajax_add_to_cart_v2() {
+        // Verify nonce
+        if (!wp_verify_nonce($_POST['nonce'], 'bracelet_customizer_nonce')) {
+            wp_send_json_error(['message' => __('Security check failed.', 'bracelet-customizer')]);
+        }
+        
+        // Get product data
+        $product_data = json_decode(stripslashes($_POST['product_data']), true);
+        $customization_id = sanitize_text_field($_POST['customization_id']);
+        
+        // Debug logging
+        error_log('Add to cart v2 called with product_data: ' . print_r($product_data, true));
+        error_log('Add to cart v2 called with customization_id: ' . $customization_id);
+        
+        if (!$product_data || !$customization_id) {
+            wp_send_json_error(['message' => __('Invalid data provided.', 'bracelet-customizer')]);
+        }
+        
+        $product_id = intval($product_data['product_id']);
+        $quantity = intval($product_data['quantity']) ?: 1;
+        $variation_data = $product_data['variation_data'] ?? [];
+        
+        // Get customization from database
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'bracelet_customizations';
+        $customization = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE id = %s OR session_id = %s ORDER BY created_at DESC LIMIT 1",
+            $customization_id,
+            $customization_id
+        ));
+        
+        if (!$customization) {
+            error_log('Customization not found for ID: ' . $customization_id);
+            wp_send_json_error(['message' => __('Customization not found.', 'bracelet-customizer')]);
+        }
+        
+        error_log('Found customization: ' . print_r($customization, true));
+        
+        $customization_data = json_decode($customization->customization_data, true);
+        
+        // Validate product
+        $product = wc_get_product($product_id);
+        if (!$product || !$this->is_customizable_product($product)) {
+            wp_send_json_error(['message' => __('Product is not customizable.', 'bracelet-customizer')]);
+        }
+        
+        // Prepare cart item data
+        $cart_item_data = [
+            'bracelet_customization' => $customization_data,
+            'customization_id' => $customization_id,
+            'unique_key' => md5($customization_id . microtime())
+        ];
+        
+        // Save custom image URL if provided by React app
+        if (isset($product_data['custom_image_url'])) {
+            $cart_item_data['custom_image_url'] = $product_data['custom_image_url'];
+        }
+        
+        // Add variation data if present
+        if (!empty($variation_data)) {
+            $cart_item_data['variation_data'] = $variation_data;
+        }
+        
+        // Add to cart
+        $cart_item_key = WC()->cart->add_to_cart($product_id, $quantity, 0, [], $cart_item_data);
+        
+        if ($cart_item_key) {
+            error_log('Successfully added to cart with key: ' . $cart_item_key);
+            wp_send_json_success([
+                'message' => __('Bracelet added to cart!', 'bracelet-customizer'),
+                'cart_url' => wc_get_cart_url(),
+                'cart_item_key' => $cart_item_key
+            ]);
+        } else {
+            error_log('Failed to add to cart for product_id: ' . $product_id . ' with data: ' . print_r($cart_item_data, true));
+            wp_send_json_error(['message' => __('Failed to add bracelet to cart.', 'bracelet-customizer')]);
+        }
+    }
+    
+    /**
+     * Generate custom cart item thumbnail
+     */
+    public function custom_cart_item_thumbnail($thumbnail, $cart_item, $cart_item_key) {
+        if (isset($cart_item['bracelet_customization'])) {
+            // Try to use pre-generated image URL first
+            $custom_image_url = $cart_item['custom_image_url'] ?? null;
+            
+            // If not available, generate it now
+            if (!$custom_image_url) {
+                $custom_image_url = $this->generate_customization_image($cart_item['bracelet_customization'], $cart_item);
+            }
+            
+            if ($custom_image_url) {
+                $product_name = $cart_item['data']->get_name();
+                $thumbnail = sprintf('<img src="%s" alt="%s" class="attachment-woocommerce_thumbnail size-woocommerce_thumbnail" style="max-width: 64px; height: auto;">', 
+                    esc_url($custom_image_url), 
+                    esc_attr($product_name)
+                );
+            }
+        }
+        return $thumbnail;
+    }
+    
+    /**
+     * Generate custom order item thumbnail
+     */
+    public function custom_order_item_thumbnail($thumbnail, $item, $order) {
+        $customization = $item->get_meta('_bracelet_customization');
+        if ($customization) {
+            // Try to use pre-saved custom image URL first
+            $custom_image_url = $item->get_meta('_custom_image_url');
+            
+            // If not available, generate it now
+            if (!$custom_image_url) {
+                // Convert order item to cart item format for image generation
+                $cart_item = [
+                    'data' => $item->get_product(),
+                    'bracelet_customization' => $customization
+                ];
+                
+                $custom_image_url = $this->generate_customization_image($customization, $cart_item);
+            }
+            
+            if ($custom_image_url) {
+                $product_name = $item->get_name();
+                $thumbnail = sprintf('<img src="%s" alt="%s" class="attachment-woocommerce_thumbnail size-woocommerce_thumbnail" style="max-width: 64px; height: auto;">', 
+                    esc_url($custom_image_url), 
+                    esc_attr($product_name)
+                );
+            }
+        }
+        return $thumbnail;
+    }
+    
+    /**
+     * Generate custom email order item thumbnail
+     */
+    public function custom_email_order_item_thumbnail($thumbnail, $item, $order) {
+        $customization = $item->get_meta('_bracelet_customization');
+        if ($customization) {
+            // Try to use pre-saved custom image URL first
+            $custom_image_url = $item->get_meta('_custom_image_url');
+            
+            // If not available, generate it now
+            if (!$custom_image_url) {
+                // Convert order item to cart item format for image generation
+                $cart_item = [
+                    'data' => $item->get_product(),
+                    'bracelet_customization' => $customization
+                ];
+                
+                $custom_image_url = $this->generate_customization_image($customization, $cart_item);
+            }
+            
+            if ($custom_image_url) {
+                $product_name = $item->get_name();
+                $thumbnail = sprintf('<img src="%s" alt="%s" style="max-width: 64px; height: auto; border: none;">', 
+                    esc_url($custom_image_url), 
+                    esc_attr($product_name)
+                );
+            }
+        }
+        return $thumbnail;
+    }
+    
+    /**
+     * Generate customization preview image URL
+     */
+    private function generate_customization_image($customization, $cart_item) {
+        // For now, check if a custom image URL was saved with the cart item
+        if (isset($cart_item['custom_image_url'])) {
+            return $cart_item['custom_image_url'];
+        }
+        
+        // If no custom image is available, fall back to product image
+        $product = $cart_item['data'];
+        if ($product && $product->get_image_id()) {
+            return wp_get_attachment_url($product->get_image_id());
+        }
+        
+        return false;
+    }
+    
     
     /**
      * Validate customization data

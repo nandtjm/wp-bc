@@ -48,6 +48,14 @@ class Bracelet_Customizer_Assets {
             true
         );
         
+        // Get WooCommerce currency information
+        $currency_code = class_exists('WooCommerce') ? get_woocommerce_currency() : 'USD';
+        $currency_symbol = class_exists('WooCommerce') ? html_entity_decode(get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8') : '$';
+        $currency_position = class_exists('WooCommerce') ? get_option('woocommerce_currency_pos', 'left') : 'left';
+        $thousand_separator = class_exists('WooCommerce') ? get_option('woocommerce_price_thousand_sep', ',') : ',';
+        $decimal_separator = class_exists('WooCommerce') ? get_option('woocommerce_price_decimal_sep', '.') : '.';
+        $price_decimals = class_exists('WooCommerce') ? get_option('woocommerce_price_num_decimals', 2) : 2;
+        
         // Add WordPress integration data
         wp_localize_script('bracelet-customizer-js', 'braceletCustomizerData', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -60,12 +68,53 @@ class Bracelet_Customizer_Assets {
             'currentUser' => wp_get_current_user()->ID,
             'woocommerceActive' => class_exists('WooCommerce'),
             'cartUrl' => function_exists('wc_get_cart_url') ? wc_get_cart_url() : '',
-            'checkoutUrl' => function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : ''
+            'checkoutUrl' => function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : '',
+            'currency' => [
+                'code' => $currency_code,
+                'symbol' => $currency_symbol,
+                'position' => $currency_position,
+                'thousandSeparator' => $thousand_separator,
+                'decimalSeparator' => $decimal_separator,
+                'decimals' => $price_decimals
+            ],
+            'letterColors' => self::get_letter_colors_for_frontend()
         ]);
         
         // Ensure React and ReactDOM are available
         wp_enqueue_script('react', 'https://unpkg.com/react@18/umd/react.production.min.js', [], '18.0.0');
         wp_enqueue_script('react-dom', 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js', ['react'], '18.0.0');
+    }
+    
+    /**
+     * Get letter colors for frontend from settings
+     */
+    private static function get_letter_colors_for_frontend() {
+        $settings = get_option('bracelet_customizer_settings', []);
+        $letter_colors = $settings['letter_colors'] ?? [];
+        
+        $frontend_colors = [];
+        foreach ($letter_colors as $color_id => $color_data) {
+            if (!empty($color_data['enabled'])) {
+                $frontend_colors[] = [
+                    'id' => $color_id,
+                    'name' => $color_data['name'] ?? ucfirst($color_id),
+                    'price' => (float) ($color_data['price'] ?? 0),
+                    'color' => $color_data['color'] ?? '#ffffff'
+                ];
+            }
+        }
+        
+        // Fallback to defaults if no settings found
+        if (empty($frontend_colors)) {
+            return [
+                ['id' => 'white', 'name' => 'White', 'price' => 0, 'color' => '#ffffff'],
+                ['id' => 'pink', 'name' => 'Pink', 'price' => 0, 'color' => '#ffc0cb'],
+                ['id' => 'black', 'name' => 'Black', 'price' => 0, 'color' => '#000000'],
+                ['id' => 'gold', 'name' => 'Gold', 'price' => 15, 'color' => '#ffd700']
+            ];
+        }
+        
+        return $frontend_colors;
     }
     
     /**
