@@ -1,0 +1,3 @@
+[submodule "bracelet-customizer"]
+	path = bracelet-customizer
+	url = https://github.com/nandtjm/bracelet-react.git
