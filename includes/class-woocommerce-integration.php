@@ -99,6 +99,11 @@ class Bracelet_Customizer_WooCommerce {
             return true;
         }
         
+        // Check if it's a bracelet collabs product type
+        if (has_term('bracelet_collabs', 'product_type', $product->get_id())) {
+            return true;
+        }
+        
         // Check if customizable meta is set
         return get_post_meta($product->get_id(), '_bracelet_customizable', true) === 'yes';
     }
