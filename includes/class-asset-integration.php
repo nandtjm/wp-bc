@@ -51,8 +51,12 @@ class Bracelet_Customizer_Assets {
         // Get WooCommerce currency settings
         $currency_data = [];
         if (function_exists('get_woocommerce_currency') && function_exists('get_woocommerce_currency_symbol')) {
+            $currency_symbol = get_woocommerce_currency_symbol();
+            // Decode HTML entities to get the actual symbol (₹ instead of &#8360;)
+            $currency_symbol = html_entity_decode($currency_symbol, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            
             $currency_data = [
-                'symbol' => get_woocommerce_currency_symbol(),
+                'symbol' => $currency_symbol,
                 'code' => get_woocommerce_currency(),
                 'position' => get_option('woocommerce_currency_pos', 'left'),
                 'thousandSeparator' => get_option('woocommerce_price_thousand_sep', ','),
