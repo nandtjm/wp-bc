@@ -92,6 +92,14 @@ class Bracelet_Customizer_Product_Types {
      * Add custom product data tabs
      */
     public function add_product_data_tabs($tabs) {
+        // Standard Bracelet Configuration Tab
+        $tabs['standard_bracelet_config'] = [
+            'label' => __('Bracelet Config', 'bracelet-customizer'),
+            'target' => 'standard_bracelet_config_data',
+            'class' => ['show_if_standard_bracelet'],
+            'priority' => 21
+        ];
+        
         // Charm Configuration Tab
         $tabs['charm_config'] = [
             'label' => __('Charm Config', 'bracelet-customizer'),
@@ -117,8 +125,20 @@ class Bracelet_Customizer_Product_Types {
     public function add_product_data_panels() {
         global $post;
         
-        // Charm Configuration Panel
+        // Standard Bracelet Configuration Panel
         ?>
+        <div id="standard_bracelet_config_data" class="panel woocommerce_options_panel hidden">
+            <div class="options_group">
+                <h4><?php _e('Standard Bracelet Configuration', 'bracelet-customizer'); ?></h4>
+                
+                <?php
+                // Letter Colors Field
+                $this->render_letter_colors_field($post->ID);
+                ?>
+            </div>
+        </div>
+        
+        <!-- Charm Configuration Panel -->
         <div id="charm_config_data" class="panel woocommerce_options_panel hidden">
             <div class="options_group">
                 <h4><?php _e('Charm Configuration', 'bracelet-customizer'); ?></h4>
@@ -194,6 +214,9 @@ class Bracelet_Customizer_Product_Types {
                 <h4><?php _e('Bracelet Collabs Configuration', 'bracelet-customizer'); ?></h4>
                 
                 <?php
+                // Letter Colors Field - moved down
+                $this->render_letter_colors_field($post->ID);
+                
                 // Get current values
                 $collabs_image_id = get_post_meta($post->ID, '_collabs_main_image', true);
                 $collabs_url = get_post_meta($post->ID, '_collabs_main_url', true);
@@ -233,6 +256,69 @@ class Bracelet_Customizer_Product_Types {
             </div>
         </div>
         <?php
+    }
+    
+    /**
+     * Render letter colors Select2 field
+     */
+    private function render_letter_colors_field($product_id) {
+        // Get plugin settings to retrieve available letter colors
+        $settings = get_option('bracelet_customizer_settings', []);
+        $available_colors = isset($settings['letter_colors']) ? $settings['letter_colors'] : [];
+        
+        // Get currently selected letter colors for this product
+        $selected_colors = get_post_meta($product_id, '_product_letter_colors', true);
+        if (empty($selected_colors) || !is_array($selected_colors)) {
+            // Default: select all enabled colors
+            $selected_colors = [];
+            foreach ($available_colors as $color_id => $color_data) {
+                if (!empty($color_data['enabled'])) {
+                    $selected_colors[] = $color_id;
+                }
+            }
+        }
+        
+        echo '<div class="letter-colors-field" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;">';
+        echo '<h4 style="margin: 0 0 10px 0;">' . __('Letter Colors', 'bracelet-customizer') . '</h4>';
+        
+        if (empty($available_colors)) {
+            echo '<p style="color: #d63638;">' . __('No letter colors configured. Please configure letter colors in the plugin settings first.', 'bracelet-customizer') . '</p>';
+            echo '<a href="' . admin_url('admin.php?page=bracelet-customizer-settings&tab=letter-colors') . '" class="button">' . __('Configure Letter Colors', 'bracelet-customizer') . '</a>';
+        } else {
+            echo '<label for="_product_letter_colors">' . __('Available Letter Colors:', 'bracelet-customizer') . '</label>';
+            echo '<br><span class="description">' . __('Select which letter colors are available for this product. Add/remove letter colors in settings.', 'bracelet-customizer') . '</span>';
+            
+            echo '<select id="_product_letter_colors" name="_product_letter_colors[]" multiple="multiple" class="wc-enhanced-select" style="width: 100%; margin-top: 10px;">';
+            
+            foreach ($available_colors as $color_id => $color_data) {
+                if (!empty($color_data['enabled'])) {
+                    $selected = in_array($color_id, $selected_colors) ? 'selected="selected"' : '';
+                    $price_text = '';
+                    if (isset($color_data['price']) && $color_data['price'] > 0) {
+                        $price_text = ' (+' . wc_price($color_data['price']) . ')';
+                    }
+                    
+                    echo '<option value="' . esc_attr($color_id) . '" ' . $selected . '>';
+                    echo esc_html($color_data['name']) . $price_text;
+                    echo '</option>';
+                }
+            }
+            
+            echo '</select>';
+            
+            // Add JavaScript to initialize Select2
+            echo '<script type="text/javascript">
+            jQuery(document).ready(function($) {
+                $("#_product_letter_colors").select2({
+                    placeholder: "' . __('Select letter colors...', 'bracelet-customizer') . '",
+                    allowClear: false,
+                    width: "100%"
+                });
+            });
+            </script>';
+        }
+        
+        echo '</div>';
     }
     
     /**
@@ -316,6 +402,15 @@ class Bracelet_Customizer_Product_Types {
             }
         }
         update_post_meta($post_id, '_charm_position_images', $position_images);
+        
+        // Save product letter colors
+        if (isset($_POST['_product_letter_colors']) && is_array($_POST['_product_letter_colors'])) {
+            $selected_colors = array_map('sanitize_text_field', $_POST['_product_letter_colors']);
+            update_post_meta($post_id, '_product_letter_colors', $selected_colors);
+        } else {
+            // If no colors selected, remove the meta
+            delete_post_meta($post_id, '_product_letter_colors');
+        }
     }
     
     /**
