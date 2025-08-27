@@ -511,7 +511,7 @@ class Bracelet_Customizer_WooCommerce {
                 if ($charm_product_id) {
                     $charm_cart_key = WC()->cart->add_to_cart(
                         $charm_product_id, 
-                        1, // quantity = 1 for each charm
+                        $quantity, // Use same quantity as main bracelet
                         0, 
                         [], 
                         [
