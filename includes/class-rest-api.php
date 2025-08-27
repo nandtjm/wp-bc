@@ -33,6 +33,10 @@ class Bracelet_Customizer_Rest_API {
      */
     private function init_hooks() {
         add_action('rest_api_init', [$this, 'register_routes']);
+        
+        // AJAX hooks for screenshot upload
+        add_action('wp_ajax_upload_preview_image', [$this, 'ajax_upload_preview_image']);
+        add_action('wp_ajax_nopriv_upload_preview_image', [$this, 'ajax_upload_preview_image']);
     }
     
     /**
@@ -79,7 +83,7 @@ class Bracelet_Customizer_Rest_API {
      * Get bracelets from WooCommerce Standard Bracelet products
      */
     public function get_bracelets($request) {
-        try {
+       try {
             // Get category filter from request
             $category = $request->get_param('category');
             
@@ -93,17 +97,24 @@ class Bracelet_Customizer_Rest_API {
                 ]);
             }
             
-            // Query WooCommerce products with Standard Bracelet and Bracelet Collabs types
+            // Query WooCommerce products with customizable bracelets (excluding charm products)
             $args = [
                 'post_type' => 'product',
                 'post_status' => 'publish',
                 'posts_per_page' => -1,
+                'meta_query' => [
+                    [
+                        'key' => '_bracelet_customizable',
+                        'value' => 'yes',
+                        'compare' => '='
+                    ]
+                ],
                 'tax_query' => [
                     [
                         'taxonomy' => 'product_type',
                         'field' => 'slug',
-                        'terms' => ['standard_bracelet', 'bracelet_collabs'],
-                        'operator' => 'IN'
+                        'terms' => 'charm',
+                        'operator' => 'NOT IN'
                     ]
                 ]
             ];
@@ -114,14 +125,14 @@ class Bracelet_Customizer_Rest_API {
             
             // If no products found, and we have less than expected, use fallback for development/testing
             if (empty($products)) {
-                error_log('No standard bracelet products found in WooCommerce. Using fallback data.');
+                error_log('No customizable bracelet products found in WooCommerce. Using fallback data.');
                 $bracelets = Bracelet_Customizer_Product_Types::get_hardcoded_bracelet_products();
                 
                 return rest_ensure_response([
                     'success' => true,
                     'data' => $bracelets,
                     'source' => 'fallback_no_products',
-                    'message' => 'No standard bracelet products found in WooCommerce database'
+                    'message' => 'No customizable bracelet products found in WooCommerce database'
                 ]);
             }
             
@@ -131,8 +142,35 @@ class Bracelet_Customizer_Rest_API {
                 
                 // Determine product type and category
                 $product_type = $product->get_type();
-                $is_collabs = ($product_type === 'bracelet_collabs');
                 
+                // Skip charm products (should already be filtered by tax_query, but double-check)
+                if ($product_type === 'charm') continue;
+                
+                $is_collabs = ($product_type === 'bracelet_collabs');
+                $is_tiny_words = ($product_type === 'tiny_words');
+                
+                // Convert product type to user-friendly category name
+                $category = $this->get_product_category($product->get_id());
+                /*
+                switch ($product_type) {
+                    case 'bracelet_collabs':
+                        $category = 'Collabs';
+                        break;
+                    case 'tiny_words':
+                        $category = 'Tiny Words';
+                        break;
+                    case 'bracelet_no_words':
+                        $category = 'No Words';
+                        break;
+                    case 'standard_bracelet':
+                        $category = 'Standard';
+                        break;
+                    default:
+                        // Fallback: convert underscores to spaces and title case
+                        $category = ucwords(str_replace(['_', '-'], ' ', $product_type));
+                        break;
+                }
+                */
                 
                 // Get product meta data
                 $bracelet_id = get_post_meta($product->get_id(), '_bracelet_id', true) ?: sanitize_title($product->get_name());
@@ -148,30 +186,41 @@ class Bracelet_Customizer_Rest_API {
                     $available_sizes = ['XS', 'S/M', 'M/L', 'L/XL'];
                 }
                 
+                // Get product-specific letter colors
+                $available_letter_colors = [];
+                $letter_color_ids = get_post_meta($product->get_id(), '_product_letter_colors', true);
+                
+                // If product has specific letter colors, get the full color data from settings
+                if (is_array($letter_color_ids) && !empty($letter_color_ids)) {
+                    $settings = get_option('bracelet_customizer_settings', []);
+                    $global_letter_colors = isset($settings['letter_colors']) ? $settings['letter_colors'] : [];
+                    
+                    foreach ($letter_color_ids as $color_id) {
+                        if (isset($global_letter_colors[$color_id])) {
+                            $available_letter_colors[] = [
+                                'id' => $color_id,
+                                'name' => $global_letter_colors[$color_id]['name'],
+                                'price' => (float) $global_letter_colors[$color_id]['price'],
+                                'color' => $global_letter_colors[$color_id]['color'],
+                                'enabled' => !empty($global_letter_colors[$color_id]['enabled'])
+                            ];
+                        }
+                    }
+                }
+                
                 // Get main bracelet image
                 $main_image = '';
-                if ($is_collabs) {
-                    // For collabs products, use collabs-specific fields
-                    $collabs_url = get_post_meta($product->get_id(), '_collabs_main_url', true);
-                    $collabs_image_id = get_post_meta($product->get_id(), '_collabs_main_image', true);
-                    
-                    if (!empty($collabs_url)) {
-                        $main_image = $collabs_url;
-                    } elseif ($collabs_image_id) {
-                        $main_image = wp_get_attachment_url($collabs_image_id);
-                    } else {
-                        // Fallback to product featured image
-                        $main_image = wp_get_attachment_url($product->get_image_id());
-                    }
+                // Use consistent main image fields for all product types
+                $product_main_url = get_post_meta($product->get_id(), '_product_main_url', true);
+                $product_main_image_id = get_post_meta($product->get_id(), '_product_main_image', true);
+                
+                if (!empty($product_main_url)) {
+                    $main_image = $product_main_url;
+                } elseif ($product_main_image_id) {
+                    $main_image = wp_get_attachment_url($product_main_image_id);
                 } else {
-                    // For standard bracelets, use standard fields
-                    $main_image_id = get_post_meta($product->get_id(), '_bracelet_main_image', true);
-                    if ($main_image_id) {
-                        $main_image = wp_get_attachment_url($main_image_id);
-                    } else {
-                        // Fallback to product featured image
-                        $main_image = wp_get_attachment_url($product->get_image_id());
-                    }
+                    // Fallback to product featured image
+                    $main_image = wp_get_attachment_url($product->get_image_id());
                 }
                 
                 // Get gap images (space images for different character counts)
@@ -179,29 +228,58 @@ class Bracelet_Customizer_Rest_API {
                 $gap_images = [];
                 $gap_data = [];
                 if (!$is_collabs) {
-                    for ($i = 2; $i <= 13; $i++) {
-                    $gap_image_id = get_post_meta($product->get_id(), "_bracelet_gap_image_{$i}char", true);
-                    $gap_url = get_post_meta($product->get_id(), "_bracelet_gap_url_{$i}char", true);
+                    if ($is_tiny_words) {
+                        // Tiny Words: process gap images from individual fields (1-10 characters) like Standard Bracelet
+                        for ($i = 1; $i <= 10; $i++) {
+                            $gap_image_id = get_post_meta($product->get_id(), "_tiny_words_gap_image_{$i}char", true);
+                            $gap_url = get_post_meta($product->get_id(), "_tiny_words_gap_url_{$i}char", true);
+                            
+                            // Determine the final image URL (URL field takes precedence, auto-filled from upload)
+                            $final_image_url = '';
+                            if (!empty($gap_url)) {
+                                $final_image_url = $gap_url;
+                            } elseif ($gap_image_id) {
+                                $final_image_url = wp_get_attachment_url($gap_image_id);
+                            }
+                            
+                            if ($final_image_url) {
+                                $gap_images[$i] = $final_image_url;
+                            }
+                            
+                            // Store detailed gap data
+                            $gap_data[$i] = [
+                                'image_url' => $final_image_url,
+                                'url_field' => $gap_url ?: '',
+                                'uploaded_image_id' => $gap_image_id ?: '',
+                                'uploaded_image_url' => $gap_image_id ? wp_get_attachment_url($gap_image_id) : ''
+                            ];
+                        }
+                    } else {
+                        // Standard Bracelets: process 2-13 characters
+                        for ($i = 2; $i <= 13; $i++) {
+                            $gap_image_id = get_post_meta($product->get_id(), "_bracelet_gap_image_{$i}char", true);
+                            $gap_url = get_post_meta($product->get_id(), "_bracelet_gap_url_{$i}char", true);
                     
-                    // Determine the final image URL (URL field takes precedence, auto-filled from upload)
-                    $final_image_url = '';
-                    if (!empty($gap_url)) {
-                        $final_image_url = $gap_url;
-                    } elseif ($gap_image_id) {
-                        $final_image_url = wp_get_attachment_url($gap_image_id);
-                    }
-                    
-                    if ($final_image_url) {
-                        $gap_images[$i] = $final_image_url;
-                    }
-                    
-                    // Store detailed gap data
-                    $gap_data[$i] = [
-                        'image_url' => $final_image_url,
-                        'url_field' => $gap_url ?: '',
-                        'uploaded_image_id' => $gap_image_id ?: '',
-                        'uploaded_image_url' => $gap_image_id ? wp_get_attachment_url($gap_image_id) : ''
-                    ];
+                            // Determine the final image URL (URL field takes precedence, auto-filled from upload)
+                            $final_image_url = '';
+                            if (!empty($gap_url)) {
+                                $final_image_url = $gap_url;
+                            } elseif ($gap_image_id) {
+                                $final_image_url = wp_get_attachment_url($gap_image_id);
+                            }
+                            
+                            if ($final_image_url) {
+                                $gap_images[$i] = $final_image_url;
+                            }
+                            
+                            // Store detailed gap data
+                            $gap_data[$i] = [
+                                'image_url' => $final_image_url,
+                                'url_field' => $gap_url ?: '',
+                                'uploaded_image_id' => $gap_image_id ?: '',
+                                'uploaded_image_url' => $gap_image_id ? wp_get_attachment_url($gap_image_id) : ''
+                            ];
+                        }
                     }
                 }
                 
@@ -212,7 +290,8 @@ class Bracelet_Customizer_Rest_API {
                 $space_stone_images = [];
                 $space_stone_data = [];
                 
-                if (!$is_collabs) {
+                // Only Standard bracelet products should have main charm data
+                if ($category === 'Standard') {
                     $main_charm_image_id = get_post_meta($product->get_id(), '_bracelet_main_charm_image', true);
                     $main_charm_url = get_post_meta($product->get_id(), '_bracelet_main_charm_url', true);
                     
@@ -284,8 +363,12 @@ class Bracelet_Customizer_Rest_API {
                     'spaceStoneImages' => $space_stone_images,
                     'spaceStoneData' => $space_stone_data,
                     'availableSizes' => $available_sizes,
+                    'availableLetterColors' => $available_letter_colors,
                     'isBestSeller' => $is_best_seller,
-                    'category' => $is_collabs ? 'collabs' : 'standard',
+                    'category' => $category,
+                    'maxWordLength' => $is_tiny_words ? 10 : 13,
+                    'supportsCharms' => !$is_tiny_words && !$is_collabs,
+                    'productType' => $product_type,
                     'slug' => $product->get_slug(),
                     'sku' => $product->get_sku()
                 ];
@@ -393,9 +476,18 @@ class Bracelet_Customizer_Rest_API {
                 // Get position images (for 9 different positions on bracelet)
                 $position_images = [];
                 for ($pos = 1; $pos <= 9; $pos++) {
-                    $pos_image_id = get_post_meta($product->get_id(), "_charm_position_image_{$pos}", true);
-                    if ($pos_image_id) {
-                        $position_images[$pos] = wp_get_attachment_url($pos_image_id);
+                    $pos_image_url = get_post_meta($product->get_id(), "_charm_position_url_{$pos}", true);
+                    if (!empty($pos_image_url)) {
+                        $position_images[$pos] = esc_url($pos_image_url);
+                    }
+                }
+                
+                // Get NoWords position images (for 7 different positions on bracelet)
+                $nowords_position_images = [];
+                for ($pos = 1; $pos <= 7; $pos++) {
+                    $nowords_pos_image_url = get_post_meta($product->get_id(), "_nowords_charm_position_url_{$pos}", true);
+                    if (!empty($nowords_pos_image_url)) {
+                        $nowords_position_images[$pos] = esc_url($nowords_pos_image_url);
                     }
                 }
                 
@@ -419,6 +511,7 @@ class Bracelet_Customizer_Rest_API {
                     'price' => (float) $product->get_price(),
                     'image' => $main_image,
                     'positionImages' => $position_images,
+                    'noWordsPositionImages' => $nowords_position_images,
                     'isNew' => $is_new,
                     'category' => $category,
                     'vibe' => $vibe,
@@ -495,11 +588,16 @@ class Bracelet_Customizer_Rest_API {
         // If customization_data is not provided as a structured object,
         // build it from flat fields (bracelet_style, word, etc.)
         if (!$customization_data && isset($params['bracelet_style'])) {
+            $letter_color_value = $params['letter_color'] ?? $params['letterColor'] ?? 'white';
+            $charms_value = $params['selected_charms'] ?? $params['selectedCharms'] ?? [];
+            
             $customization_data = [
                 'bracelet_style' => $params['bracelet_style'] ?? '',
                 'word' => $params['word'] ?? '',
-                'letter_color' => $params['letter_color'] ?? $params['letterColor'] ?? 'white',
-                'selected_charms' => $params['selected_charms'] ?? $params['selectedCharms'] ?? [],
+                'letter_color' => $letter_color_value,
+                'letterColor' => $letter_color_value, // Ensure both keys exist
+                'selected_charms' => $charms_value,
+                'selectedCharms' => $charms_value, // Ensure both keys exist
                 'size' => $params['size'] ?? 'M/L',
                 'quantity' => $params['quantity'] ?? 1
             ];
@@ -534,6 +632,18 @@ class Bracelet_Customizer_Rest_API {
             if (json_last_error() === JSON_ERROR_NONE) {
                 $customization_data = $decoded;
             }
+        }
+        
+        // Normalize letter color keys to ensure both letter_color and letterColor exist
+        if (is_array($customization_data)) {
+            $letter_color_value = $customization_data['letter_color'] ?? $customization_data['letterColor'] ?? 'white';
+            $customization_data['letter_color'] = $letter_color_value;
+            $customization_data['letterColor'] = $letter_color_value;
+            
+            // Also normalize charm keys
+            $charms_value = $customization_data['selected_charms'] ?? $customization_data['selectedCharms'] ?? [];
+            $customization_data['selected_charms'] = $charms_value;
+            $customization_data['selectedCharms'] = $charms_value;
         }
         
         $table_name = $wpdb->prefix . 'bracelet_customizations';
@@ -603,21 +713,29 @@ class Bracelet_Customizer_Rest_API {
      * Upload preview image from React app
      */
     public function upload_preview_image($request) {
+        error_log('Upload preview image called');
+        
         $customization_id = $request->get_param('customization_id');
         $image_data = $request->get_param('image_data'); // Base64 image data
         
+        error_log('Customization ID: ' . $customization_id);
+        error_log('Image data length: ' . strlen($image_data ?? ''));
+        
         if (!$customization_id || !$image_data) {
+            error_log('Missing customization_id or image_data');
             return new WP_Error('missing_data', 'Missing customization_id or image_data', ['status' => 400]);
         }
         
         // Decode base64 image
         $image_parts = explode(';base64,', $image_data);
         if (count($image_parts) < 2) {
+            error_log('Invalid image data format');
             return new WP_Error('invalid_image', 'Invalid image data format', ['status' => 400]);
         }
         
         $image_base64 = base64_decode($image_parts[1]);
         if (!$image_base64) {
+            error_log('Failed to decode image data');
             return new WP_Error('decode_failed', 'Failed to decode image data', ['status' => 400]);
         }
         
@@ -627,24 +745,151 @@ class Bracelet_Customizer_Rest_API {
         $custom_images_url = $upload_dir['baseurl'] . '/bracelet-customizations/';
         
         if (!file_exists($custom_images_dir)) {
-            wp_mkdir_p($custom_images_dir);
+            if (!wp_mkdir_p($custom_images_dir)) {
+                error_log('Failed to create directory: ' . $custom_images_dir);
+                return new WP_Error('dir_failed', 'Failed to create upload directory', ['status' => 500]);
+            }
         }
         
-        // Save image
-        $image_filename = 'preview_' . $customization_id . '.png';
+        // Save image with timestamp to avoid conflicts
+        $timestamp = time();
+        $image_filename = 'preview_' . $customization_id . '_' . $timestamp . '.png';
         $image_path = $custom_images_dir . $image_filename;
         $image_url = $custom_images_url . $image_filename;
         
+        error_log('Saving image to: ' . $image_path);
+        error_log('Image URL will be: ' . $image_url);
+        
         $result = file_put_contents($image_path, $image_base64);
         if (!$result) {
+            error_log('Failed to save image to filesystem');
             return new WP_Error('save_failed', 'Failed to save image', ['status' => 500]);
         }
+        
+        // Verify the image was saved correctly
+        if (!file_exists($image_path)) {
+            error_log('Image file does not exist after save');
+            return new WP_Error('verify_failed', 'Image file verification failed', ['status' => 500]);
+        }
+        
+        error_log('Image uploaded successfully: ' . $image_url);
         
         return rest_ensure_response([
             'success' => true,
             'image_url' => $image_url,
-            'customization_id' => $customization_id
+            'customization_id' => $customization_id,
+            'file_size' => filesize($image_path)
         ]);
+    }
+    
+    /**
+     * AJAX handler for screenshot upload
+     */
+    public function ajax_upload_preview_image() {
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'bracelet_customizer_nonce')) {
+            wp_send_json_error(['message' => 'Nonce verification failed'], 403);
+            return;
+        }
+        
+        // Handle file upload from FormData
+        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $customization_id = sanitize_text_field($_POST['customization_id']);
+            
+            if (!$customization_id) {
+                wp_send_json_error(['message' => 'Missing customization_id'], 400);
+                return;
+            }
+            
+            // Convert uploaded file to base64 data URL
+            $file_content = file_get_contents($_FILES['image']['tmp_name']);
+            $base64_data = 'data:image/png;base64,' . base64_encode($file_content);
+            
+            // Use the same logic as the REST method
+            $image_parts = explode(';base64,', $base64_data);
+            if (count($image_parts) < 2) {
+                wp_send_json_error(['message' => 'Invalid image data format'], 400);
+                return;
+            }
+            
+            $image_base64 = base64_decode($image_parts[1]);
+            if (!$image_base64) {
+                wp_send_json_error(['message' => 'Failed to decode image data'], 400);
+                return;
+            }
+            
+            // Create upload directory
+            $upload_dir = wp_upload_dir();
+            $custom_images_dir = $upload_dir['basedir'] . '/bracelet-customizations/';
+            $custom_images_url = $upload_dir['baseurl'] . '/bracelet-customizations/';
+            
+            if (!file_exists($custom_images_dir)) {
+                if (!wp_mkdir_p($custom_images_dir)) {
+                    wp_send_json_error(['message' => 'Failed to create upload directory'], 500);
+                    return;
+                }
+            }
+            
+            // Save image with timestamp to avoid conflicts
+            $timestamp = time();
+            $image_filename = 'preview_' . $customization_id . '_' . $timestamp . '.png';
+            $image_path = $custom_images_dir . $image_filename;
+            $image_url = $custom_images_url . $image_filename;
+            
+            $result = file_put_contents($image_path, $image_base64);
+            if (!$result) {
+                wp_send_json_error(['message' => 'Failed to save image'], 500);
+                return;
+            }
+            
+            // Verify the image was saved correctly
+            if (!file_exists($image_path)) {
+                wp_send_json_error(['message' => 'Image file verification failed'], 500);
+                return;
+            }
+            
+            wp_send_json_success([
+                'image_url' => $image_url,
+                'customization_id' => $customization_id,
+                'file_size' => filesize($image_path)
+            ]);
+            
+        } else {
+            wp_send_json_error(['message' => 'No file uploaded or upload error'], 400);
+        }
+    }
+    
+    /**
+     * Helper method to get product category for charm position logic
+     */
+    private function get_product_category($product_id) {
+        $product = wc_get_product($product_id);
+        if (!$product) {
+            return 'Standard';
+        }
+        
+        $product_type = $product->get_type();
+        
+        switch ($product_type) {
+            case 'bracelet_collabs':
+                $category = 'Collabs';
+                break;
+            case 'tiny_words':
+                $category = 'Tiny Words';
+                break;
+            case 'bracelet_no_words':
+                $category = 'No Words';
+                break;
+            case 'standard_bracelet':
+                $category = 'Standard';
+                break;
+            default:
+                // Fallback: convert underscores to spaces and title case
+                $category = ucwords(str_replace(['_', '-'], ' ', $product_type));
+                break;
+        }
+
+        return $category;
     }
     
     /**
