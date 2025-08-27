@@ -52,13 +52,8 @@ class Bracelet_Customizer_WooCommerce {
         // Hide internal meta keys from order display
         add_filter('woocommerce_hidden_order_itemmeta', [$this, 'hide_internal_order_meta']);
         
-        // Handle special preview cart items
+        // Add preview link to cart item names
         add_filter('woocommerce_cart_item_name', [$this, 'customize_preview_cart_item_name'], 10, 3);
-        add_filter('woocommerce_cart_item_price', [$this, 'hide_preview_item_price'], 10, 3);
-        add_action('woocommerce_cart_item_removed', [$this, 'cleanup_preview_product']);
-        
-        // Prevent preview items from being added to orders
-        add_action('woocommerce_checkout_create_order_line_item', [$this, 'handle_preview_item_checkout'], 1, 4);
         
         // Order hooks
         add_action('woocommerce_checkout_create_order_line_item', [$this, 'add_customization_to_order_item'], 10, 4);
@@ -187,6 +182,10 @@ class Bracelet_Customizer_WooCommerce {
         
         if (array_key_exists('custom_image_url', $values)) {
             $item['custom_image_url'] = $values['custom_image_url'];
+        }
+        
+        if (array_key_exists('preview_image_url', $values)) {
+            $item['preview_image_url'] = $values['preview_image_url'];
         }
         
         return $item;
@@ -539,13 +538,11 @@ class Bracelet_Customizer_WooCommerce {
             }
         }
         
-        // Add "View Preview" virtual cart item with screenshot
+        // Add captured image to main bracelet cart item for preview
         if (isset($product_data['custom_image_url'])) {
-            $preview_cart_key = $this->add_preview_cart_item($customization_id, $product_data['custom_image_url']);
-            if ($preview_cart_key) {
-                $added_items[] = $preview_cart_key;
-                error_log('Added preview item to cart with key: ' . $preview_cart_key);
-            }
+            // Update main cart item with preview data
+            WC()->cart->cart_contents[$main_cart_item_key]['preview_image_url'] = $product_data['custom_image_url'];
+            error_log('Added preview image URL to main cart item: ' . $product_data['custom_image_url']);
         }
         
         wp_send_json_success([
@@ -620,105 +617,28 @@ class Bracelet_Customizer_WooCommerce {
         return $product_id;
     }
     
-    /**
-     * Add "View Preview" virtual cart item
-     */
-    private function add_preview_cart_item($customization_id, $screenshot_url) {
-        // Create a virtual product for the preview
-        $preview_product = new WC_Product_Simple();
-        $preview_product->set_virtual(true);
-        $preview_product->set_downloadable(false);
-        $preview_product->set_name(__('View Preview', 'bracelet-customizer'));
-        $preview_product->set_description(__('Click to view your custom bracelet preview', 'bracelet-customizer'));
-        $preview_product->set_short_description(__('Custom Bracelet Preview', 'bracelet-customizer'));
-        $preview_product->set_price(0);
-        $preview_product->set_regular_price(0);
-        $preview_product->set_catalog_visibility('hidden');
-        $preview_product->set_status('private');
-        
-        // Save the virtual product temporarily
-        $preview_product_id = $preview_product->save();
-        
-        if (!$preview_product_id) {
-            return false;
-        }
-        
-        // Add to cart with special data
-        $preview_cart_key = WC()->cart->add_to_cart(
-            $preview_product_id,
-            1,
-            0,
-            [],
-            [
-                'is_preview_item' => true,
-                'customization_id' => $customization_id,
-                'screenshot_url' => $screenshot_url,
-                'unique_key' => md5('preview_' . $customization_id . microtime())
-            ]
-        );
-        
-        return $preview_cart_key;
-    }
     
     /**
-     * Customize preview cart item name with clickable link
+     * Customize cart item name to add preview link for customized bracelets
      */
     public function customize_preview_cart_item_name($product_name, $cart_item, $cart_item_key) {
-        if (isset($cart_item['is_preview_item']) && $cart_item['is_preview_item']) {
-            $screenshot_url = $cart_item['screenshot_url'] ?? '';
+        // Add preview link to bracelet products that have customization and preview image
+        if (isset($cart_item['bracelet_customization']) && isset($cart_item['preview_image_url'])) {
+            $screenshot_url = $cart_item['preview_image_url'];
             if ($screenshot_url) {
-                // Create clickable preview link
-                $product_name = sprintf(
-                    '<a href="%s" target="_blank" onclick="window.open(\'%s\', \'preview\', \'width=800,height=600,scrollbars=yes,resizable=yes\'); return false;">%s</a>',
+                // Add preview link after product name
+                $preview_link = sprintf(
+                    ' <a href="%s" target="_blank" onclick="window.open(\'%s\', \'preview\', \'width=800,height=600,scrollbars=yes,resizable=yes\'); return false;" style="color: #0073aa; text-decoration: none; font-weight: normal;">%s</a>',
                     esc_url($screenshot_url),
                     esc_url($screenshot_url),
-                    __('🔍 View Preview', 'bracelet-customizer')
+                    __('[View Preview]', 'bracelet-customizer')
                 );
+                $product_name .= $preview_link;
             }
         }
         return $product_name;
     }
     
-    /**
-     * Hide price for preview items (they're free)
-     */
-    public function hide_preview_item_price($price, $cart_item, $cart_item_key) {
-        if (isset($cart_item['is_preview_item']) && $cart_item['is_preview_item']) {
-            return '<span style="color: #999; font-style: italic;">' . __('Free', 'bracelet-customizer') . '</span>';
-        }
-        return $price;
-    }
-    
-    /**
-     * Cleanup temporary preview product when cart item is removed
-     */
-    public function cleanup_preview_product($cart_item_key) {
-        $cart_item = WC()->cart->get_removed_cart_contents()[$cart_item_key] ?? null;
-        
-        if ($cart_item && isset($cart_item['is_preview_item']) && $cart_item['is_preview_item']) {
-            $product_id = $cart_item['product_id'] ?? 0;
-            if ($product_id) {
-                // Delete the temporary virtual product
-                wp_delete_post($product_id, true);
-            }
-        }
-    }
-    
-    /**
-     * Handle preview items during checkout (prevent them from being ordered)
-     */
-    public function handle_preview_item_checkout($item, $cart_item_key, $values, $order) {
-        if (isset($values['is_preview_item']) && $values['is_preview_item']) {
-            // Remove preview items from the order - they're just for cart display
-            $order->remove_item($item->get_id());
-            
-            // Clean up the temporary product
-            $product_id = $values['product_id'] ?? 0;
-            if ($product_id) {
-                wp_delete_post($product_id, true);
-            }
-        }
-    }
     
     /**
      * Generate custom cart item thumbnail
