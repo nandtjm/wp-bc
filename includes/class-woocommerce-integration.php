@@ -29,6 +29,8 @@ class Bracelet_Customizer_WooCommerce {
     private function init_hooks() {
         // Product page hooks
         add_action('woocommerce_single_product_summary', [$this, 'add_customize_button'], 35);
+        add_action('flatsome_custom_single_product_1', [$this, 'add_customize_button']);
+        add_action('wp_head', [$this, 'add_redirect_script']);
         
         // Cart hooks
         add_filter('woocommerce_add_cart_item_data', [$this, 'add_customization_to_cart'], 10, 3);
@@ -87,6 +89,38 @@ class Bracelet_Customizer_WooCommerce {
     }
     
     /**
+     * Add redirect script for handling product context
+     */
+    public function add_redirect_script() {
+        ?>
+        <script type="text/javascript">
+            // Store referring product page URL for customizer close button
+            if (document.location.href.includes('product_id=')) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const productId = urlParams.get('product_id');
+                if (productId) {
+                    // Store the referring product URL in session storage
+                    const referrer = document.referrer;
+                    if (referrer) {
+                        sessionStorage.setItem('bracelet_customizer_referrer', referrer);
+                    }
+                }
+            }
+            
+            // Handle close button on customizer page
+            window.closeBraceletCustomizer = function() {
+                const referrer = sessionStorage.getItem('bracelet_customizer_referrer');
+                if (referrer) {
+                    window.location.href = referrer;
+                } else {
+                    window.history.back();
+                }
+            };
+        </script>
+        <?php
+    }
+    
+    /**
      * Check if product is customizable
      */
     private function is_customizable_product($product) {
@@ -94,18 +128,24 @@ class Bracelet_Customizer_WooCommerce {
             return false;
         }
         
-        // Check if it's a standard bracelet product type
-        if (has_term('standard_bracelet', 'product_type', $product->get_id())) {
-            return true;
+        // Check if product has customizable bracelet product type
+        $product_type = $product->get_type();
+        $customizable_types = ['standard_bracelet', 'bracelet_collabs', 'tiny_words', 'bracelet_no_words'];
+        
+        if (!in_array($product_type, $customizable_types)) {
+            return false;
         }
         
-        // Check if it's a bracelet collabs product type
-        if (has_term('bracelet_collabs', 'product_type', $product->get_id())) {
-            return true;
+        // Check customizable meta value
+        $customizable_meta = get_post_meta($product->get_id(), '_bracelet_customizable', true);
+        
+        // For bracelet product types, default to customizable if meta is not set
+        // This handles the case where the meta value hasn't been saved yet
+        if ($customizable_meta === '') {
+            return true; // Default to customizable for bracelet product types
         }
         
-        // Check if customizable meta is set
-        return get_post_meta($product->get_id(), '_bracelet_customizable', true) === 'yes';
+        return $customizable_meta === 'yes';
     }
     
     /**
@@ -430,6 +470,9 @@ class Bracelet_Customizer_WooCommerce {
         // Save custom image URL if provided by React app
         if (isset($product_data['custom_image_url'])) {
             $cart_item_data['custom_image_url'] = $product_data['custom_image_url'];
+            error_log('Custom image URL stored in cart data: ' . $product_data['custom_image_url']);
+        } else {
+            error_log('No custom image URL provided in product_data');
         }
         
         // Add variation data if present
@@ -457,13 +500,21 @@ class Bracelet_Customizer_WooCommerce {
      * Generate custom cart item thumbnail
      */
     public function custom_cart_item_thumbnail($thumbnail, $cart_item, $cart_item_key) {
+        error_log('Cart item thumbnail called for key: ' . $cart_item_key);
+        error_log('Cart item data: ' . print_r($cart_item, true));
+        
         if (isset($cart_item['bracelet_customization'])) {
+            error_log('Bracelet customization found in cart item');
+            
             // Try to use pre-generated image URL first
             $custom_image_url = $cart_item['custom_image_url'] ?? null;
+            error_log('Custom image URL from cart item: ' . ($custom_image_url ?? 'null'));
             
             // If not available, generate it now
             if (!$custom_image_url) {
+                error_log('No custom image URL found, trying to generate...');
                 $custom_image_url = $this->generate_customization_image($cart_item['bracelet_customization'], $cart_item);
+                error_log('Generated image URL: ' . ($custom_image_url ?? 'null'));
             }
             
             if ($custom_image_url) {
@@ -472,7 +523,12 @@ class Bracelet_Customizer_WooCommerce {
                     esc_url($custom_image_url), 
                     esc_attr($product_name)
                 );
+                error_log('Custom thumbnail generated: ' . $thumbnail);
+            } else {
+                error_log('No custom image URL available, using default thumbnail');
             }
+        } else {
+            error_log('No bracelet customization found in cart item');
         }
         return $thumbnail;
     }
@@ -481,6 +537,39 @@ class Bracelet_Customizer_WooCommerce {
      * Generate custom order item thumbnail
      */
     public function custom_order_item_thumbnail($thumbnail, $item, $order) {
+        // Handle different parameter types - sometimes $item is an ID, sometimes an object
+        if (is_numeric($item)) {
+            // $item is an item ID, we need to get the order item object
+            if (is_numeric($order)) {
+                $order = wc_get_order($order);
+            }
+            if (!$order) {
+                return $thumbnail;
+            }
+            $order_item = null;
+            foreach ($order->get_items() as $order_item_obj) {
+                if ($order_item_obj->get_id() == $item) {
+                    $order_item = $order_item_obj;
+                    break;
+                }
+            }
+            if (!$order_item) {
+                return $thumbnail;
+            }
+            $item = $order_item;
+        } elseif (is_numeric($order)) {
+            // $order is an order ID, convert to object
+            $order = wc_get_order($order);
+            if (!$order) {
+                return $thumbnail;
+            }
+        }
+        
+        // Now $item should be a proper order item object
+        if (!is_object($item) || !method_exists($item, 'get_meta')) {
+            return $thumbnail;
+        }
+        
         $customization = $item->get_meta('_bracelet_customization');
         if ($customization) {
             // Try to use pre-saved custom image URL first
@@ -512,6 +601,39 @@ class Bracelet_Customizer_WooCommerce {
      * Generate custom email order item thumbnail
      */
     public function custom_email_order_item_thumbnail($thumbnail, $item, $order) {
+        // Handle different parameter types - sometimes $item is an ID, sometimes an object
+        if (is_numeric($item)) {
+            // $item is an item ID, we need to get the order item object
+            if (is_numeric($order)) {
+                $order = wc_get_order($order);
+            }
+            if (!$order) {
+                return $thumbnail;
+            }
+            $order_item = null;
+            foreach ($order->get_items() as $order_item_obj) {
+                if ($order_item_obj->get_id() == $item) {
+                    $order_item = $order_item_obj;
+                    break;
+                }
+            }
+            if (!$order_item) {
+                return $thumbnail;
+            }
+            $item = $order_item;
+        } elseif (is_numeric($order)) {
+            // $order is an order ID, convert to object
+            $order = wc_get_order($order);
+            if (!$order) {
+                return $thumbnail;
+            }
+        }
+        
+        // Now $item should be a proper order item object
+        if (!is_object($item) || !method_exists($item, 'get_meta')) {
+            return $thumbnail;
+        }
+        
         $customization = $item->get_meta('_bracelet_customization');
         if ($customization) {
             // Try to use pre-saved custom image URL first
