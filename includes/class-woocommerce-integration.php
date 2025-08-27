@@ -198,10 +198,12 @@ class Bracelet_Customizer_WooCommerce {
         if (isset($cart_item['bracelet_customization'])) {
             $customization = $cart_item['bracelet_customization'];
             
-            if (isset($customization['word'])) {
+            // Display word only once - prioritize the word field
+            $word = $customization['word'] ?? $customization['text'] ?? '';
+            if (!empty($word)) {
                 $item_data[] = [
-                    'key' => __('Word', 'bracelet-customizer'),
-                    'value' => strtoupper($customization['word'])
+                    'key' => __('Words', 'bracelet-customizer'),
+                    'value' => strtoupper($word)
                 ];
             }
             
@@ -212,22 +214,22 @@ class Bracelet_Customizer_WooCommerce {
                 ];
             }
             
-            // Handle both possible charm field names
-            $selected_charms = $customization['selectedCharms'] ?? $customization['selected_charms'] ?? [];
-            if (!empty($selected_charms)) {
-                $charm_names = array_column($selected_charms, 'name');
-                $item_data[] = [
-                    'key' => __('Charms', 'bracelet-customizer'),
-                    'value' => implode(', ', $charm_names)
-                ];
-            }
-            
             if (isset($customization['size'])) {
                 $item_data[] = [
                     'key' => __('Size', 'bracelet-customizer'),
                     'value' => strtoupper($customization['size'])
                 ];
             }
+            
+            // Note: Charms section removed since charms are now separate products
+        }
+        
+        // Add preview image URL if available
+        if (isset($cart_item['preview_image_url'])) {
+            $item_data[] = [
+                'key' => __('View Preview', 'bracelet-customizer'),
+                'value' => '<a href="' . esc_url($cart_item['preview_image_url']) . '" target="_blank">' . __('View Preview Image', 'bracelet-customizer') . '</a>'
+            ];
         }
         
         return $item_data;
@@ -275,11 +277,7 @@ class Bracelet_Customizer_WooCommerce {
      * Add customization to cart item name
      */
     public function add_customization_to_cart_item($product_name, $cart_item, $cart_item_key) {
-        if (isset($cart_item['bracelet_customization']['word'])) {
-            $word = $cart_item['bracelet_customization']['word'];
-            $product_name .= '<br><small>' . sprintf(__('Word: %s', 'bracelet-customizer'), strtoupper($word)) . '</small>';
-        }
-        
+        // Removed duplicate word display - word is now only shown in cart item meta
         return $product_name;
     }
     
@@ -488,6 +486,7 @@ class Bracelet_Customizer_WooCommerce {
         // Save custom image URL if provided by React app
         if (isset($product_data['custom_image_url'])) {
             $cart_item_data['custom_image_url'] = $product_data['custom_image_url'];
+            $cart_item_data['preview_image_url'] = $product_data['custom_image_url']; // Store for preview link
             error_log('Custom image URL stored in cart data: ' . $product_data['custom_image_url']);
         } else {
             error_log('No custom image URL provided in product_data');
@@ -538,12 +537,7 @@ class Bracelet_Customizer_WooCommerce {
             }
         }
         
-        // Add captured image to main bracelet cart item for preview
-        if (isset($product_data['custom_image_url'])) {
-            // Update main cart item with preview data
-            WC()->cart->cart_contents[$main_cart_item_key]['preview_image_url'] = $product_data['custom_image_url'];
-            error_log('Added preview image URL to main cart item: ' . $product_data['custom_image_url']);
-        }
+        // Preview image URL already stored in cart item data above
         
         wp_send_json_success([
             'message' => __('Bracelet and charms added to cart!', 'bracelet-customizer'),
@@ -622,20 +616,7 @@ class Bracelet_Customizer_WooCommerce {
      * Customize cart item name to add preview link for customized bracelets
      */
     public function customize_preview_cart_item_name($product_name, $cart_item, $cart_item_key) {
-        // Add preview link to bracelet products that have customization and preview image
-        if (isset($cart_item['bracelet_customization']) && isset($cart_item['preview_image_url'])) {
-            $screenshot_url = $cart_item['preview_image_url'];
-            if ($screenshot_url) {
-                // Add preview link after product name
-                $preview_link = sprintf(
-                    ' <a href="%s" target="_blank" onclick="window.open(\'%s\', \'preview\', \'width=800,height=600,scrollbars=yes,resizable=yes\'); return false;" style="color: #0073aa; text-decoration: none; font-weight: normal;">%s</a>',
-                    esc_url($screenshot_url),
-                    esc_url($screenshot_url),
-                    __('[View Preview]', 'bracelet-customizer')
-                );
-                $product_name .= $preview_link;
-            }
-        }
+        // Preview link is now shown in cart meta instead of product title to avoid duplication
         return $product_name;
     }
     

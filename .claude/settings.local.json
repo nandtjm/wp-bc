@@ -42,7 +42,9 @@
       "Bash(done)",
       "Bash(wp post list:*)",
       "Bash(cd:*)",
-      "Bash(wp post meta get:*)"
+      "Bash(wp post meta get:*)",
+      "Bash(sed:*)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "defaultMode": "acceptEdits",

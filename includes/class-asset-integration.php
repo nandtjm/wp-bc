@@ -48,23 +48,6 @@ class Bracelet_Customizer_Assets {
             true
         );
         
-        // Get WooCommerce currency settings
-        $currency_data = [];
-        if (function_exists('get_woocommerce_currency') && function_exists('get_woocommerce_currency_symbol')) {
-            $currency_symbol = get_woocommerce_currency_symbol();
-            // Decode HTML entities to get the actual symbol (₹ instead of &#8360;)
-            $currency_symbol = html_entity_decode($currency_symbol, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-            
-            $currency_data = [
-                'symbol' => $currency_symbol,
-                'code' => get_woocommerce_currency(),
-                'position' => get_option('woocommerce_currency_pos', 'left'),
-                'thousandSeparator' => get_option('woocommerce_price_thousand_sep', ','),
-                'decimalSeparator' => get_option('woocommerce_price_decimal_sep', '.'),
-                'decimals' => (int) get_option('woocommerce_price_num_decimals', 2)
-            ];
-        }
-
         // Add WordPress integration data
         wp_localize_script('bracelet-customizer-js', 'braceletCustomizerData', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -77,8 +60,7 @@ class Bracelet_Customizer_Assets {
             'currentUser' => wp_get_current_user()->ID,
             'woocommerceActive' => class_exists('WooCommerce'),
             'cartUrl' => function_exists('wc_get_cart_url') ? wc_get_cart_url() : '',
-            'checkoutUrl' => function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : '',
-            'currency' => $currency_data
+            'checkoutUrl' => function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : ''
         ]);
         
         // Ensure React and ReactDOM are available

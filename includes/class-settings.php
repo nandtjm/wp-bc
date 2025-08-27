@@ -181,69 +181,70 @@ class Bracelet_Customizer_Settings {
             ]
         );
         
+        // Register sections for each tab with unique page identifiers
+        $this->register_settings_sections();
         
-        // Styling Options Section
-        add_settings_section(
-            'styling_options',
-            __('Styling Options', 'bracelet-customizer'),
-            [$this, 'render_section_description'],
-            $this->page_slug
-        );
-        
-        // Feature Configuration Section
-        add_settings_section(
-            'feature_configuration',
-            __('Feature Configuration', 'bracelet-customizer'),
-            [$this, 'render_section_description'],
-            $this->page_slug
-        );
-        
-        // Letter Colors Section
-        add_settings_section(
-            'letter_colors',
-            __('Letter Colors', 'bracelet-customizer'),
-            [$this, 'render_section_description'],
-            $this->page_slug
-        );
-        
-        // UI Settings Section
-        add_settings_section(
-            'ui_settings',
-            __('User Interface', 'bracelet-customizer'),
-            [$this, 'render_section_description'],
-            $this->page_slug
-        );
-        
-        // API Settings Section
-        add_settings_section(
-            'api_settings',
-            __('API Settings', 'bracelet-customizer'),
-            [$this, 'render_section_description'],
-            $this->page_slug
-        );
-        
-        // Advanced Settings Section
-        add_settings_section(
-            'advanced_settings',
-            __('Advanced Settings', 'bracelet-customizer'),
-            [$this, 'render_section_description'],
-            $this->page_slug
-        );
-        
-        // Add settings fields
-        $this->add_settings_fields();
+        // Add settings fields for each tab
+        $this->add_all_settings_fields();
     }
     
     /**
-     * Add settings fields
+     * Register settings sections for all tabs
      */
-    private function add_settings_fields() {
+    private function register_settings_sections() {
+        $sections = [
+            'styling' => [
+                'id' => 'styling_options',
+                'title' => __('Styling Options', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_styling'
+            ],
+            'features' => [
+                'id' => 'feature_configuration', 
+                'title' => __('Feature Configuration', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_features'
+            ],
+            'letter-colors' => [
+                'id' => 'letter_colors',
+                'title' => __('Letter Colors', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_letter_colors'
+            ],
+            'interface' => [
+                'id' => 'ui_settings',
+                'title' => __('User Interface', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_interface'
+            ],
+            'api' => [
+                'id' => 'api_settings',
+                'title' => __('API Settings', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_api'
+            ],
+            'advanced' => [
+                'id' => 'advanced_settings',
+                'title' => __('Advanced Settings', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_advanced'
+            ]
+        ];
+        
+        foreach ($sections as $section) {
+            add_settings_section(
+                $section['id'],
+                $section['title'],
+                [$this, 'render_section_description'],
+                $section['page']
+            );
+        }
+    }
+    
+    /**
+     * Add all settings fields for all tabs
+     */
+    private function add_all_settings_fields() {
         // Feature Configuration Fields
         add_settings_field(
             'max_word_length',
             __('Maximum Word Length', 'bracelet-customizer'),
             [$this, 'render_number_field'],
-            $this->page_slug,
+            $this->page_slug . '_features',
             'feature_configuration',
             [
                 'field' => 'max_word_length',
@@ -258,7 +259,7 @@ class Bracelet_Customizer_Settings {
             'min_word_length',
             __('Minimum Word Length', 'bracelet-customizer'),
             [$this, 'render_number_field'],
-            $this->page_slug,
+            $this->page_slug . '_features',
             'feature_configuration',
             [
                 'field' => 'min_word_length',
@@ -273,7 +274,7 @@ class Bracelet_Customizer_Settings {
             'allowed_characters',
             __('Allowed Characters', 'bracelet-customizer'),
             [$this, 'render_text_field'],
-            $this->page_slug,
+            $this->page_slug . '_features',
             'feature_configuration',
             [
                 'field' => 'allowed_characters',
@@ -287,7 +288,7 @@ class Bracelet_Customizer_Settings {
             'primary_color',
             __('Primary Button Color', 'bracelet-customizer'),
             [$this, 'render_color_field'],
-            $this->page_slug,
+            $this->page_slug . '_styling',
             'styling_options',
             [
                 'field' => 'button_colors.primary',
@@ -299,7 +300,7 @@ class Bracelet_Customizer_Settings {
             'secondary_color',
             __('Secondary Button Color', 'bracelet-customizer'),
             [$this, 'render_color_field'],
-            $this->page_slug,
+            $this->page_slug . '_styling',
             'styling_options',
             [
                 'field' => 'button_colors.secondary',
@@ -312,7 +313,7 @@ class Bracelet_Customizer_Settings {
             'customize_button_text',
             __('Customize Button Text', 'bracelet-customizer'),
             [$this, 'render_text_field'],
-            $this->page_slug,
+            $this->page_slug . '_styling',
             'styling_options',
             [
                 'field' => 'button_labels.customize',
@@ -326,7 +327,7 @@ class Bracelet_Customizer_Settings {
             'letter_colors_config',
             __('Letter Color Options', 'bracelet-customizer'),
             [$this, 'render_letter_colors_field'],
-            $this->page_slug,
+            $this->page_slug . '_letter_colors',
             'letter_colors',
             [
                 'field' => 'letter_colors',
@@ -339,7 +340,7 @@ class Bracelet_Customizer_Settings {
             'customizer_page',
             __('Customizer Page', 'bracelet-customizer'),
             [$this, 'render_page_select_field'],
-            $this->page_slug,
+            $this->page_slug . '_interface',
             'ui_settings',
             [
                 'field' => 'ui_settings.customizer_page_id',
@@ -351,7 +352,7 @@ class Bracelet_Customizer_Settings {
             'enable_animations',
             __('Enable Animations', 'bracelet-customizer'),
             [$this, 'render_checkbox_field'],
-            $this->page_slug,
+            $this->page_slug . '_interface',
             'ui_settings',
             [
                 'field' => 'ui_settings.enable_animations',
@@ -363,7 +364,7 @@ class Bracelet_Customizer_Settings {
             'enable_modal',
             __('Use Modal Mode', 'bracelet-customizer'),
             [$this, 'render_checkbox_field'],
-            $this->page_slug,
+            $this->page_slug . '_interface',
             'ui_settings',
             [
                 'field' => 'enable_modal',
@@ -377,7 +378,7 @@ class Bracelet_Customizer_Settings {
             'enable_rest_api',
             __('Enable REST API', 'bracelet-customizer'),
             [$this, 'render_checkbox_field'],
-            $this->page_slug,
+            $this->page_slug . '_api',
             'api_settings',
             [
                 'field' => 'api_settings.enable_rest_api',
@@ -390,7 +391,7 @@ class Bracelet_Customizer_Settings {
             'enable_caching',
             __('Enable Caching', 'bracelet-customizer'),
             [$this, 'render_checkbox_field'],
-            $this->page_slug,
+            $this->page_slug . '_api',
             'api_settings',
             [
                 'field' => 'api_settings.enable_caching',
@@ -404,7 +405,7 @@ class Bracelet_Customizer_Settings {
             'enable_debug',
             __('Enable Debug Mode', 'bracelet-customizer'),
             [$this, 'render_checkbox_field'],
-            $this->page_slug,
+            $this->page_slug . '_advanced',
             'advanced_settings',
             [
                 'field' => 'advanced_settings.enable_debug',
@@ -417,7 +418,7 @@ class Bracelet_Customizer_Settings {
             'cleanup_on_uninstall',
             __('Cleanup on Uninstall', 'bracelet-customizer'),
             [$this, 'render_checkbox_field'],
-            $this->page_slug,
+            $this->page_slug . '_advanced',
             'advanced_settings',
             [
                 'field' => 'advanced_settings.cleanup_on_uninstall',
@@ -437,7 +438,7 @@ class Bracelet_Customizer_Settings {
         }
         
         // Get current tab from URL parameter
-        $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'assets';
+        $current_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'styling';
         
         // Handle welcome message
         $show_welcome = isset($_GET['welcome']) && $_GET['welcome'] === '1';
@@ -499,6 +500,24 @@ class Bracelet_Customizer_Settings {
                 <?php $this->render_current_tab_content($current_tab); ?>
                 
                 <?php submit_button(__('Save Settings', 'bracelet-customizer')); ?>
+                <div class="bracelet-customizer-settings-actions" style="padding:20px;border-top:1px solid #c3c4c7;background:#f6f7f7;display:flex;gap:8px;align-items:center;">
+                    <a
+                        class="button button-secondary"
+                        id="export-settings"
+                        href="#"
+                    >
+                        <?php esc_html_e('Export Settings', 'bracelet-customizer'); ?>
+                    </a>
+
+                    <button type="button" class="button button-secondary" id="import-settings">
+                        <?php esc_html_e('Import Settings', 'bracelet-customizer'); ?>
+                    </button>
+
+                    <button type="button" class="button button-link-delete" id="reset-settings">
+                        <?php esc_html_e('Reset to Defaults', 'bracelet-customizer'); ?>
+                    </button>
+                </div>
+
                 </form>
                 
                 <input type="file" id="import-file" accept=".json" style="display: none;">
@@ -517,7 +536,7 @@ class Bracelet_Customizer_Settings {
             
             // Get the current tab from POST data
             $current_tab = isset($_POST['bracelet_customizer_current_tab']) ? 
-                          sanitize_text_field($_POST['bracelet_customizer_current_tab']) : 'assets';
+                          sanitize_text_field($_POST['bracelet_customizer_current_tab']) : 'styling';
             
             // Add tab parameter to redirect URL
             $location = add_query_arg('tab', $current_tab, $location);
@@ -530,77 +549,65 @@ class Bracelet_Customizer_Settings {
      * Render current tab content
      */
     private function render_current_tab_content($current_tab) {
-        switch ($current_tab) {
-            case 'styling':
-                $this->render_tab_content(
-                    __('Styling Options', 'bracelet-customizer'),
-                    __('Customize the appearance of buttons and interface elements.', 'bracelet-customizer'),
-                    'styling_options'
-                );
-                break;
-                
-            case 'features':
-                $this->render_tab_content(
-                    __('Feature Configuration', 'bracelet-customizer'),
-                    __('Configure customizer features and limitations.', 'bracelet-customizer'),
-                    'feature_configuration'
-                );
-                break;
-                
-            case 'letter-colors':
-                $this->render_tab_content(
-                    __('Letter Colors', 'bracelet-customizer'),
-                    __('Manage available letter colors and pricing.', 'bracelet-customizer'),
-                    'letter_colors'
-                );
-                break;
-                
-            case 'interface':
-                $this->render_tab_content(
-                    __('User Interface', 'bracelet-customizer'),
-                    __('Configure user interface behavior and appearance.', 'bracelet-customizer'),
-                    'ui_settings'
-                );
-                break;
-                
-            case 'api':
-                $this->render_tab_content(
-                    __('API Settings', 'bracelet-customizer'),
-                    __('Configure REST API and performance settings.', 'bracelet-customizer'),
-                    'api_settings'
-                );
-                break;
-                
-            case 'advanced':
-                $this->render_tab_content(
-                    __('Advanced Settings', 'bracelet-customizer'),
-                    __('Advanced configuration options.', 'bracelet-customizer'),
-                    'advanced_settings'
-                );
-                break;
-                
-            default:
-                // Default to styling tab
-                $this->render_tab_content(
-                    __('Styling Options', 'bracelet-customizer'),
-                    __('Customize the appearance of buttons and interface elements.', 'bracelet-customizer'),
-                    'styling_options'
-                );
-                break;
+        $tab_config = [
+            'styling' => [
+                'title' => __('Styling Options', 'bracelet-customizer'),
+                'description' => __('Customize the appearance of buttons and interface elements.', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_styling',
+                'section' => 'styling_options'
+            ],
+            'features' => [
+                'title' => __('Feature Configuration', 'bracelet-customizer'),
+                'description' => __('Configure customizer features and limitations.', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_features',
+                'section' => 'feature_configuration'
+            ],
+            'letter-colors' => [
+                'title' => __('Letter Colors', 'bracelet-customizer'),
+                'description' => __('Manage available letter colors and pricing.', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_letter_colors',
+                'section' => 'letter_colors'
+            ],
+            'interface' => [
+                'title' => __('User Interface', 'bracelet-customizer'),
+                'description' => __('Configure user interface behavior and appearance.', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_interface',
+                'section' => 'ui_settings'
+            ],
+            'api' => [
+                'title' => __('API Settings', 'bracelet-customizer'),
+                'description' => __('Configure REST API and performance settings.', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_api',
+                'section' => 'api_settings'
+            ],
+            'advanced' => [
+                'title' => __('Advanced Settings', 'bracelet-customizer'),
+                'description' => __('Advanced configuration options.', 'bracelet-customizer'),
+                'page' => $this->page_slug . '_advanced',
+                'section' => 'advanced_settings'
+            ]
+        ];
+        
+        // Default to styling if invalid tab
+        if (!isset($tab_config[$current_tab])) {
+            $current_tab = 'styling';
         }
+        
+        $config = $tab_config[$current_tab];
+        $this->render_tab_content($config['title'], $config['description'], $config['page'], $config['section']);
     }
     
     /**
      * Render individual tab content
      */
-    private function render_tab_content($title, $description, $section_id) {
+    private function render_tab_content($title, $description, $page, $section_id) {
         ?>
         <div class="bracelet-customizer-tab-content">
             <h3><?php echo esc_html($title); ?></h3>
             <p><?php echo esc_html($description); ?></p>
             <table class="form-table" role="presentation">
                 <tbody>
-                    <?php do_settings_fields($this->page_slug, $section_id); ?>
+                    <?php do_settings_fields($page, $section_id); ?>
                 </tbody>
             </table>
         </div>
@@ -962,14 +969,14 @@ class Bracelet_Customizer_Settings {
      * Sanitize settings
      */
     public function sanitize_settings($input) {
-        $sanitized = [];
+        // Get existing settings to preserve values not in current form submission
+        $existing_settings = get_option($this->option_name, $this->defaults);
+        $sanitized = $existing_settings;
         
-        // Sanitize each field based on type
-        foreach ($this->defaults as $key => $default_value) {
-            if (isset($input[$key])) {
-                $sanitized[$key] = $this->sanitize_field($key, $input[$key], $default_value);
-            } else {
-                $sanitized[$key] = $default_value;
+        // Only sanitize and update fields that are actually in the input (from current tab)
+        foreach ($input as $key => $value) {
+            if (array_key_exists($key, $this->defaults)) {
+                $sanitized[$key] = $this->sanitize_field($key, $value, $this->defaults[$key]);
             }
         }
         
@@ -991,7 +998,12 @@ class Bracelet_Customizer_Settings {
                 
             case 'button_colors':
                 if (is_array($value)) {
-                    $sanitized = [];
+                    // Get existing settings to preserve values not in current form submission
+                    $existing_settings = get_option($this->option_name, $this->defaults);
+                    $existing_colors = isset($existing_settings['button_colors']) ? $existing_settings['button_colors'] : $default;
+                    $sanitized = $existing_colors;
+                    
+                    // Only update submitted values
                     foreach ($value as $color_key => $color_value) {
                         $sanitized[sanitize_key($color_key)] = sanitize_hex_color($color_value);
                     }
@@ -1001,7 +1013,12 @@ class Bracelet_Customizer_Settings {
                 
             case 'button_labels':
                 if (is_array($value)) {
-                    $sanitized = [];
+                    // Get existing settings to preserve values not in current form submission
+                    $existing_settings = get_option($this->option_name, $this->defaults);
+                    $existing_labels = isset($existing_settings['button_labels']) ? $existing_settings['button_labels'] : $default;
+                    $sanitized = $existing_labels;
+                    
+                    // Only update submitted values
                     foreach ($value as $label_key => $label_value) {
                         $sanitized[sanitize_key($label_key)] = sanitize_text_field($label_value);
                     }
@@ -1011,12 +1028,18 @@ class Bracelet_Customizer_Settings {
                 
             case 'letter_colors':
                 if (is_array($value)) {
-                    $sanitized = [];
+                    // Get existing settings to preserve values not in current form submission
+                    $existing_settings = get_option($this->option_name, $this->defaults);
+                    $existing_colors = isset($existing_settings['letter_colors']) ? $existing_settings['letter_colors'] : $default;
+                    $sanitized = $existing_colors;
+                    
+                    // Only update submitted values
                     foreach ($value as $color_id => $color_data) {
                         $sanitized[sanitize_key($color_id)] = [
                             'name' => sanitize_text_field($color_data['name']),
                             'price' => floatval($color_data['price']),
-                            'enabled' => !empty($color_data['enabled'])
+                            'enabled' => !empty($color_data['enabled']),
+                            'color' => sanitize_hex_color($color_data['color']) ?: '#ffffff'
                         ];
                     }
                     return $sanitized;
@@ -1027,9 +1050,14 @@ class Bracelet_Customizer_Settings {
             case 'api_settings':
             case 'advanced_settings':
                 if (is_array($value)) {
-                    $sanitized = [];
+                    // Get existing settings to preserve values not in current form submission
+                    $existing_settings = get_option($this->option_name, $this->defaults);
+                    $existing_nested = isset($existing_settings[$key]) ? $existing_settings[$key] : $default;
+                    $sanitized = $existing_nested;
+                    
+                    // Only update submitted values
                     foreach ($value as $setting_key => $setting_value) {
-                        $sanitized[sanitize_key($setting_key)] = is_bool($default[$setting_key]) ? !empty($setting_value) : sanitize_text_field($setting_value);
+                        $sanitized[sanitize_key($setting_key)] = isset($default[$setting_key]) && is_bool($default[$setting_key]) ? !empty($setting_value) : sanitize_text_field($setting_value);
                     }
                     return $sanitized;
                 }

@@ -46,6 +46,9 @@ class Bracelet_Customizer_Product_Types {
         // Add product type specific JavaScript
         add_action('admin_footer', [$this, 'add_product_type_js']);
         
+        // Add custom handling for checkbox default values
+        add_action('admin_head', [$this, 'add_checkbox_default_handling']);
+        
         // Filter product class
         add_filter('woocommerce_product_class', [$this, 'woocommerce_product_class'], 10, 2);
         
@@ -60,21 +63,33 @@ class Bracelet_Customizer_Product_Types {
         require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/product-types/class-wc-product-standard-bracelet.php';
         require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/product-types/class-wc-product-charm.php';
         require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/product-types/class-wc-product-bracelet-collabs.php';
+        require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/product-types/class-wc-product-tiny-words.php';
+        require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/product-types/class-wc-product-bracelet-no-words.php';
+        
+        // Include debug script
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/debug-customizable-meta.php';
+        }
     }
     
     /**
      * Register custom product types
      */
     public function register_product_types() {
-        // Register Standard Bracelet product type
-        if (class_exists('WC_Product_Type')) {
-            class_alias('WC_Product_Standard_Bracelet', 'WC_Product_Standard_Bracelet_Type');
-        }
-        
-        // Register Charm product type
-        if (class_exists('WC_Product_Type')) {
-            class_alias('WC_Product_Charm', 'WC_Product_Charm_Type');
-        }
+        // Register custom product types with WooCommerce
+        add_filter('woocommerce_data_stores', [$this, 'register_product_data_stores']);
+    }
+    
+    /**
+     * Register product data stores for custom product types
+     */
+    public function register_product_data_stores($stores) {
+        $stores['product-standard_bracelet'] = 'WC_Product_Data_Store_CPT';
+        $stores['product-charm'] = 'WC_Product_Data_Store_CPT';
+        $stores['product-bracelet_collabs'] = 'WC_Product_Data_Store_CPT';
+        $stores['product-tiny_words'] = 'WC_Product_Data_Store_CPT';
+        $stores['product-bracelet_no_words'] = 'WC_Product_Data_Store_CPT';
+        return $stores;
     }
     
     /**
@@ -83,6 +98,8 @@ class Bracelet_Customizer_Product_Types {
     public function add_product_type_selector($types) {
         $types['standard_bracelet'] = __('Standard Bracelet', 'bracelet-customizer');
         $types['bracelet_collabs'] = __('Bracelet Collabs', 'bracelet-customizer');
+        $types['bracelet_no_words'] = __('Bracelet - No Words', 'bracelet-customizer');
+        $types['tiny_words'] = __('Tiny Words', 'bracelet-customizer');
         $types['charm'] = __('Charm', 'bracelet-customizer');
         
         return $types;
@@ -92,6 +109,12 @@ class Bracelet_Customizer_Product_Types {
      * Add custom product data tabs
      */
     public function add_product_data_tabs($tabs) {
+        $add_show_if = function (&$tab) {
+            if (!isset($tab['class'])) $tab['class'] = [];
+            if (!in_array('show_if_charm', $tab['class'], true)) {
+                $tab['class'][] = 'show_if_charm';
+            }
+        };
         // Standard Bracelet Configuration Tab
         $tabs['standard_bracelet_config'] = [
             'label' => __('Bracelet Config', 'bracelet-customizer'),
@@ -99,7 +122,11 @@ class Bracelet_Customizer_Product_Types {
             'class' => ['show_if_standard_bracelet'],
             'priority' => 21
         ];
-        
+
+        if (isset($tabs['general'])) {
+            $add_show_if($tabs['general']);
+        }
+
         // Charm Configuration Tab
         $tabs['charm_config'] = [
             'label' => __('Charm Config', 'bracelet-customizer'),
@@ -107,6 +134,7 @@ class Bracelet_Customizer_Product_Types {
             'class' => ['show_if_charm'],
             'priority' => 21
         ];
+
         
         // Bracelet Collabs Configuration Tab
         $tabs['bracelet_collabs_config'] = [
@@ -114,6 +142,30 @@ class Bracelet_Customizer_Product_Types {
             'target' => 'bracelet_collabs_config_data',
             'class' => ['show_if_bracelet_collabs'],
             'priority' => 21
+        ];
+        
+        // Tiny Words Configuration Tab
+        $tabs['tiny_words_config'] = [
+            'label' => __('Tiny Word Config', 'bracelet-customizer'),
+            'target' => 'tiny_words_config_data',
+            'class' => ['show_if_tiny_words'],
+            'priority' => 21
+        ];
+        
+        // Bracelet No Words Configuration Tab
+        $tabs['bracelet_no_words_config'] = [
+            'label' => __('No Words Config', 'bracelet-customizer'),
+            'target' => 'bracelet_no_words_config_data',
+            'class' => ['show_if_bracelet_no_words'],
+            'priority' => 21
+        ];
+        
+        // Tiny Words Gaps Tab
+        $tabs['tiny_words_gaps'] = [
+            'label' => __('Gaps (Max 10)', 'bracelet-customizer'),
+            'target' => 'tiny_words_gaps_data',
+            'class' => ['show_if_tiny_words'],
+            'priority' => 22
         ];
         
         return $tabs;
@@ -169,9 +221,9 @@ class Bracelet_Customizer_Product_Types {
                     'description' => __('Mark this charm as a bestseller.', 'bracelet-customizer')
                 ]);
                 
-                // Get current values
-                $main_charm_image_id = get_post_meta($post->ID, '_charm_main_image', true);
-                $main_charm_url = get_post_meta($post->ID, '_charm_main_url', true);
+                // Get current values using consistent meta keys
+                $main_charm_image_id = get_post_meta($post->ID, '_product_main_image', true);
+                $main_charm_url = get_post_meta($post->ID, '_product_main_url', true);
                 
                 // Auto-fill URL if image is uploaded but URL is empty
                 if ($main_charm_image_id && empty($main_charm_url)) {
@@ -183,7 +235,7 @@ class Bracelet_Customizer_Product_Types {
                 
                 // Image URL field
                 woocommerce_wp_text_input([
-                    'id' => '_charm_main_url',
+                    'id' => '_product_main_url',
                     'label' => __('Main Charm Image URL', 'bracelet-customizer'),
                     'description' => __('Image URL (auto-filled when uploaded via WordPress, or enter external CDN/Cloud URL)', 'bracelet-customizer'),
                     'desc_tip' => true,
@@ -192,14 +244,14 @@ class Bracelet_Customizer_Product_Types {
                     'type' => 'url',
                     'custom_attributes' => [
                         'placeholder' => 'https://example.com/main-charm.webp',
-                        'data-auto-fill-field' => '_charm_main_image'
+                        'data-auto-fill-field' => '_product_main_image'
                     ]
                 ]);
                 
                 // Image upload field
                 $this->render_image_field(
                     $post->ID, 
-                    '_charm_main_image', 
+                    '_product_main_image', 
                     __('Upload Main Charm Image', 'bracelet-customizer')
                 );
                 
@@ -218,8 +270,8 @@ class Bracelet_Customizer_Product_Types {
                 $this->render_letter_colors_field($post->ID);
                 
                 // Get current values
-                $collabs_image_id = get_post_meta($post->ID, '_collabs_main_image', true);
-                $collabs_url = get_post_meta($post->ID, '_collabs_main_url', true);
+                $collabs_image_id = get_post_meta($post->ID, '_product_main_image', true);
+                $collabs_url = get_post_meta($post->ID, '_product_main_url', true);
                 
                 // Auto-fill URL if image is uploaded but URL is empty
                 if ($collabs_image_id && empty($collabs_url)) {
@@ -231,7 +283,7 @@ class Bracelet_Customizer_Product_Types {
                 
                 // Image URL field
                 woocommerce_wp_text_input([
-                    'id' => '_collabs_main_url',
+                    'id' => '_product_main_url',
                     'label' => __('Collabs Image URL', 'bracelet-customizer'),
                     'description' => __('Image URL (auto-filled when uploaded via WordPress, or enter external CDN/Cloud URL)', 'bracelet-customizer'),
                     'desc_tip' => true,
@@ -240,18 +292,168 @@ class Bracelet_Customizer_Product_Types {
                     'type' => 'url',
                     'custom_attributes' => [
                         'placeholder' => 'https://example.com/collabs-bracelet.webp',
-                        'data-auto-fill-field' => '_collabs_main_image'
+                        'data-auto-fill-field' => '_product_main_image'
                     ]
                 ]);
                 
                 // Image upload field
                 $this->render_image_field(
                     $post->ID, 
-                    '_collabs_main_image', 
+                    '_product_main_image', 
                     __('Upload Collabs Image', 'bracelet-customizer')
                 );
                 
                 echo '</div>';
+                ?>
+            </div>
+        </div>
+        
+        <!-- Bracelet No Words Configuration Panel -->
+        <div id="bracelet_no_words_config_data" class="panel woocommerce_options_panel hidden">
+            <div class="options_group">
+                <h4><?php _e('Bracelet - No Words Configuration', 'bracelet-customizer'); ?></h4>
+                
+                <?php
+                // Get current values
+                $no_words_image_id = get_post_meta($post->ID, '_product_main_image', true);
+                $no_words_url = get_post_meta($post->ID, '_product_main_url', true);
+                
+                // Auto-fill URL if image is uploaded but URL is empty
+                if ($no_words_image_id && empty($no_words_url)) {
+                    $no_words_url = wp_get_attachment_url($no_words_image_id);
+                }
+                
+                echo '<div class="no-words-image-group" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;">';
+                echo '<h4 style="margin: 0 0 10px 0;">' . __('Bracelet No Words Image', 'bracelet-customizer') . '</h4>';
+                
+                // Image URL field
+                woocommerce_wp_text_input([
+                    'id' => '_product_main_url',
+                    'label' => __('No Words Image URL', 'bracelet-customizer'),
+                    'description' => __('Image URL (auto-filled when uploaded via WordPress, or enter external CDN/Cloud URL)', 'bracelet-customizer'),
+                    'desc_tip' => true,
+                    'value' => $no_words_url,
+                    'wrapper_class' => 'form-row form-row-wide',
+                    'type' => 'url',
+                    'custom_attributes' => [
+                        'placeholder' => 'https://example.com/no-words-bracelet.webp',
+                        'data-auto-fill-field' => '_product_main_image'
+                    ]
+                ]);
+                
+                // Image upload field
+                $this->render_image_field(
+                    $post->ID, 
+                    '_product_main_image', 
+                    __('Upload No Words Image', 'bracelet-customizer')
+                );
+                
+                echo '</div>';
+                ?>
+            </div>
+        </div>
+        
+        <!-- Tiny Words Configuration Panel -->
+        <div id="tiny_words_config_data" class="panel woocommerce_options_panel hidden">
+            <div class="options_group">
+                <h4><?php _e('Tiny Words Configuration', 'bracelet-customizer'); ?></h4>
+                
+                <?php
+                // Bestseller checkbox
+                woocommerce_wp_checkbox([
+                    'id' => '_tiny_words_is_bestseller',
+                    'label' => __('Bestseller', 'bracelet-customizer'),
+                    'description' => __('Mark this tiny words bracelet as a bestseller.', 'bracelet-customizer'),
+                    'value' => get_post_meta($post->ID, '_tiny_words_is_bestseller', true)
+                ]);
+                
+                // Letter Colors Field
+                $this->render_letter_colors_field($post->ID);
+                
+                // Get current values
+                $tiny_words_image_id = get_post_meta($post->ID, '_product_main_image', true);
+                $tiny_words_url = get_post_meta($post->ID, '_product_main_url', true);
+                
+                // Auto-fill URL if image is uploaded but URL is empty
+                if ($tiny_words_image_id && empty($tiny_words_url)) {
+                    $tiny_words_url = wp_get_attachment_url($tiny_words_image_id);
+                }
+                
+                echo '<div class="tiny-words-image-group" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;">';
+                echo '<h4 style="margin: 0 0 10px 0;">' . __('Main Tiny Words Image', 'bracelet-customizer') . '</h4>';
+                
+                // Image URL field
+                woocommerce_wp_text_input([
+                    'id' => '_product_main_url',
+                    'label' => __('Main Image URL', 'bracelet-customizer'),
+                    'description' => __('Image URL (auto-filled when uploaded via WordPress, or enter external CDN/Cloud URL)', 'bracelet-customizer'),
+                    'desc_tip' => true,
+                    'value' => $tiny_words_url,
+                    'wrapper_class' => 'form-row form-row-wide',
+                    'type' => 'url',
+                    'custom_attributes' => [
+                        'placeholder' => 'https://example.com/tiny-words-bracelet.webp',
+                        'data-auto-fill-field' => '_product_main_image'
+                    ]
+                ]);
+                
+                // Image upload field
+                $this->render_image_field(
+                    $post->ID, 
+                    '_product_main_image', 
+                    __('Upload Main Image', 'bracelet-customizer')
+                );
+                
+                echo '</div>';
+                ?>
+            </div>
+        </div>
+        
+        <!-- Tiny Words Gaps Panel -->
+        <div id="tiny_words_gaps_data" class="panel woocommerce_options_panel hidden">
+            <div class="options_group">
+                <h4><?php _e('Tiny Words Gap Images (Maximum 10 Characters)', 'bracelet-customizer'); ?></h4>
+                <p class="description"><?php _e('Upload gap images for different character counts. Tiny words bracelets support up to 10 characters maximum.', 'bracelet-customizer'); ?></p>
+                
+                <?php
+                // Create gap image fields for 1-10 characters following Standard Bracelet pattern
+                for ($i = 1; $i <= 10; $i++) {
+                    echo '<div class="gap-image-group" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;">';
+                    echo '<h4 style="margin: 0 0 10px 0;">' . sprintf(__('GAP %d - %d Character Gap', 'bracelet-customizer'), $i, $i) . '</h4>';
+                    
+                    // Get current values
+                    $gap_image_id = get_post_meta($post->ID, "_tiny_words_gap_image_{$i}char", true);
+                    $gap_url = get_post_meta($post->ID, "_tiny_words_gap_url_{$i}char", true);
+                    
+                    // Auto-fill URL if image is uploaded but URL is empty
+                    if ($gap_image_id && empty($gap_url)) {
+                        $gap_url = wp_get_attachment_url($gap_image_id);
+                    }
+                    
+                    // Image URL field
+                    woocommerce_wp_text_input([
+                        'id' => "_tiny_words_gap_url_{$i}char",
+                        'label' => sprintf(__('GAP %d Image URL', 'bracelet-customizer'), $i),
+                        'description' => __('Image URL (auto-filled when uploaded via WordPress, or enter external CDN/Cloud URL)', 'bracelet-customizer'),
+                        'desc_tip' => true,
+                        'value' => $gap_url,
+                        'wrapper_class' => 'form-row form-row-wide',
+                        'type' => 'url',
+                        'custom_attributes' => [
+                            'placeholder' => 'https://example.com/tiny-words-' . $i . 'char.webp',
+                            'data-auto-fill-field' => "_tiny_words_gap_image_{$i}char"
+                        ]
+                    ]);
+                    
+                    // Image upload field
+                    $this->render_image_field(
+                        $post->ID, 
+                        "_tiny_words_gap_image_{$i}char", 
+                        sprintf(__('Upload Image for GAP %d', 'bracelet-customizer'), $i)
+                    );
+                    
+                    echo '</div>';
+                }
                 ?>
             </div>
         </div>
@@ -266,54 +468,80 @@ class Bracelet_Customizer_Product_Types {
         $settings = get_option('bracelet_customizer_settings', []);
         $available_colors = isset($settings['letter_colors']) ? $settings['letter_colors'] : [];
         
-        // Get currently selected letter colors for this product
-        $selected_colors = get_post_meta($product_id, '_product_letter_colors', true);
-        if (empty($selected_colors) || !is_array($selected_colors)) {
-            // Default: select all enabled colors
-            $selected_colors = [];
-            foreach ($available_colors as $color_id => $color_data) {
-                if (!empty($color_data['enabled'])) {
+        // Use consistent meta key for all product types
+        $meta_key  = '_product_letter_colors';
+        $field_name = $field_id = '_product_letter_colors';
+
+        // Did this meta ever exist?
+        $meta_exists = metadata_exists( 'post', $product_id, $meta_key );
+
+        // Read current selection (null if never saved)
+        $selected_colors = $meta_exists ? get_post_meta( $product_id, $meta_key, true ) : null;
+
+        // Normalize to array when value exists
+        if ( $selected_colors !== null ) {
+            if ( ! is_array( $selected_colors ) ) {
+                $selected_colors = $selected_colors !== '' ? array( $selected_colors ) : array();
+            }
+        }
+
+        $selected_colors = array_values( array_filter( $selected_colors ?: array(), 'strlen' ) );
+
+        // Only for brand-new (never-saved) products, default to all enabled colors
+        if ( null === $selected_colors ) {
+            $selected_colors = array();
+            foreach ( $available_colors as $color_id => $color_data ) {
+                if ( ! empty( $color_data['enabled'] ) ) {
                     $selected_colors[] = $color_id;
                 }
             }
         }
         
         echo '<div class="letter-colors-field" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;">';
-        echo '<h4 style="margin: 0 0 10px 0;">' . __('Letter Colors', 'bracelet-customizer') . '</h4>';
+        echo '<h4 style="margin: 0 0 10px 0;">' . __( 'Letter Colors', 'bracelet-customizer' ) . '</h4>';
         
-        if (empty($available_colors)) {
-            echo '<p style="color: #d63638;">' . __('No letter colors configured. Please configure letter colors in the plugin settings first.', 'bracelet-customizer') . '</p>';
-            echo '<a href="' . admin_url('admin.php?page=bracelet-customizer-settings&tab=letter-colors') . '" class="button">' . __('Configure Letter Colors', 'bracelet-customizer') . '</a>';
+        if ( empty( $available_colors ) ) {
+            echo '<p style="color: #d63638;">' . __( 'No letter colors configured. Please configure letter colors in the plugin settings first.', 'bracelet-customizer' ) . '</p>';
+            echo '<a href="' . esc_url( admin_url( 'admin.php?page=bracelet-customizer-settings&tab=letter-colors' ) ) . '" class="button">' . __( 'Configure Letter Colors', 'bracelet-customizer' ) . '</a>';
         } else {
-            echo '<label for="_product_letter_colors">' . __('Available Letter Colors:', 'bracelet-customizer') . '</label>';
-            echo '<br><span class="description">' . __('Select which letter colors are available for this product. Add/remove letter colors in settings.', 'bracelet-customizer') . '</span>';
+            echo '<label for="' . esc_attr( $field_id ) . '">' . __( 'Available Letter Colors:', 'bracelet-customizer' ) . '</label>';
+            echo '<br><span class="description">' . __( 'Select which letter colors are available for this product. Add/remove letter colors in settings.', 'bracelet-customizer' ) . '</span>';
             
-            echo '<select id="_product_letter_colors" name="_product_letter_colors[]" multiple="multiple" class="wc-enhanced-select" style="width: 100%; margin-top: 10px;">';
+            // Add a hidden field to ensure POST field is always present (even when empty)
+            echo '<input type="hidden" name="' . esc_attr( $field_name ) . '_submitted" value="1" />';
             
-            foreach ($available_colors as $color_id => $color_data) {
-                if (!empty($color_data['enabled'])) {
-                    $selected = in_array($color_id, $selected_colors) ? 'selected="selected"' : '';
+            echo '<select id="' . esc_attr( $field_id ) . '" name="' . esc_attr( $field_name ) . '[]" multiple="multiple" class="wc-enhanced-select" style="width: 100%; margin-top: 10px;">';
+            
+            foreach ( $available_colors as $color_id => $color_data ) {
+                if ( ! empty( $color_data['enabled'] ) ) {
+                    $selected = in_array( $color_id, $selected_colors, true ) ? 'selected="selected"' : '';
                     $price_text = '';
-                    if (isset($color_data['price']) && $color_data['price'] > 0) {
-                        $price_text = ' (+' . wc_price($color_data['price']) . ')';
+                    if ( isset( $color_data['price'] ) && $color_data['price'] > 0 ) {
+                        $price_text = ' (+' . wc_price( $color_data['price'] ) . ')';
                     }
                     
-                    echo '<option value="' . esc_attr($color_id) . '" ' . $selected . '>';
-                    echo esc_html($color_data['name']) . $price_text;
+                    echo '<option value="' . esc_attr( $color_id ) . '" ' . esc_html( $selected ) . '>';
+                    echo esc_html( $color_data['name'] ) . wp_kses_post( $price_text );
                     echo '</option>';
                 }
             }
             
             echo '</select>';
             
-            // Add JavaScript to initialize Select2
+            // Add JavaScript to initialize Select2 properly
             echo '<script type="text/javascript">
             jQuery(document).ready(function($) {
-                $("#_product_letter_colors").select2({
-                    placeholder: "' . __('Select letter colors...', 'bracelet-customizer') . '",
-                    allowClear: false,
+                var selectField = $("#' . esc_js( $field_id ) . '");
+                
+                // Initialize Select2
+                $(".letter-colors-field select[name=\'_product_letter_colors[]\']")
+                .not(".select2-hidden-accessible")
+                .select2({
+                    placeholder: "' . esc_js( __( 'Select letter colors...', 'bracelet-customizer' ) ) . '",
+                    allowClear: true,
                     width: "100%"
                 });
+
             });
             </script>';
         }
@@ -324,16 +552,25 @@ class Bracelet_Customizer_Product_Types {
     /**
      * Save custom product data
      */
-    public function save_product_data($post_id) {
-        // Save charm data
-        if (isset($_POST['_charm_category'])) {
-            update_post_meta($post_id, '_charm_category', sanitize_text_field($_POST['_charm_category']));
+    public function save_product_data( $post_id ) {
+        // Verify nonce and check permissions
+        if ( ! isset( $_POST['woocommerce_meta_nonce'] ) || ! wp_verify_nonce( sanitize_key( $_POST['woocommerce_meta_nonce'] ), 'woocommerce_save_data' ) ) {
+            return;
         }
         
-        if (isset($_POST['_charm_is_new'])) {
-            update_post_meta($post_id, '_charm_is_new', 'yes');
+        if ( ! current_user_can( 'edit_post', $post_id ) ) {
+            return;
+        }
+        
+        // Save charm data
+        if ( isset( $_POST['_charm_category'] ) ) {
+            update_post_meta( $post_id, '_charm_category', sanitize_text_field( wp_unslash( $_POST['_charm_category'] ) ) );
+        }
+        
+        if ( isset( $_POST['_charm_is_new'] ) ) {
+            update_post_meta( $post_id, '_charm_is_new', 'yes' );
         } else {
-            update_post_meta($post_id, '_charm_is_new', 'no');
+            update_post_meta( $post_id, '_charm_is_new', 'no' );
         }
         
         if (isset($_POST['_charm_is_bestseller'])) {
@@ -355,42 +592,42 @@ class Bracelet_Customizer_Product_Types {
         }
         
         // Save main charm image and URL
-        if (isset($_POST['_charm_main_image'])) {
-            update_post_meta($post_id, '_charm_main_image', sanitize_text_field($_POST['_charm_main_image']));
+        if (isset($_POST['_product_main_image'])) {
+            update_post_meta($post_id, '_product_main_image', sanitize_text_field($_POST['_product_main_image']));
         }
         
-        if (isset($_POST['_charm_main_url'])) {
-            update_post_meta($post_id, '_charm_main_url', esc_url_raw($_POST['_charm_main_url']));
+        if (isset($_POST['_product_main_url'])) {
+            update_post_meta($post_id, '_product_main_url', esc_url_raw($_POST['_product_main_url']));
         }
         
         // Auto-fill URL when main charm image is uploaded
-        $main_charm_image_id = isset($_POST['_charm_main_image']) ? $_POST['_charm_main_image'] : '';
-        $main_charm_url = isset($_POST['_charm_main_url']) ? $_POST['_charm_main_url'] : '';
+        $main_charm_image_id = isset($_POST['_product_main_image']) ? $_POST['_product_main_image'] : '';
+        $main_charm_url = isset($_POST['_product_main_url']) ? $_POST['_product_main_url'] : '';
         
         if ($main_charm_image_id && empty($main_charm_url)) {
             $auto_url = wp_get_attachment_url($main_charm_image_id);
             if ($auto_url) {
-                update_post_meta($post_id, '_charm_main_url', $auto_url);
+                update_post_meta($post_id, '_product_main_url', $auto_url);
             }
         }
         
         // Save Bracelet Collabs data
-        if (isset($_POST['_collabs_main_image'])) {
-            update_post_meta($post_id, '_collabs_main_image', sanitize_text_field($_POST['_collabs_main_image']));
+        if (isset($_POST['_product_main_image'])) {
+            update_post_meta($post_id, '_product_main_image', sanitize_text_field($_POST['_product_main_image']));
         }
         
-        if (isset($_POST['_collabs_main_url'])) {
-            update_post_meta($post_id, '_collabs_main_url', esc_url_raw($_POST['_collabs_main_url']));
+        if (isset($_POST['_product_main_url'])) {
+            update_post_meta($post_id, '_product_main_url', esc_url_raw($_POST['_product_main_url']));
         }
         
         // Auto-fill URL when collabs image is uploaded
-        $collabs_image_id = isset($_POST['_collabs_main_image']) ? $_POST['_collabs_main_image'] : '';
-        $collabs_url = isset($_POST['_collabs_main_url']) ? $_POST['_collabs_main_url'] : '';
+        $collabs_image_id = isset($_POST['_product_main_image']) ? $_POST['_product_main_image'] : '';
+        $collabs_url = isset($_POST['_product_main_url']) ? $_POST['_product_main_url'] : '';
         
         if ($collabs_image_id && empty($collabs_url)) {
             $auto_url = wp_get_attachment_url($collabs_image_id);
             if ($auto_url) {
-                update_post_meta($post_id, '_collabs_main_url', $auto_url);
+                update_post_meta($post_id, '_product_main_url', $auto_url);
             }
         }
         
@@ -403,13 +640,124 @@ class Bracelet_Customizer_Product_Types {
         }
         update_post_meta($post_id, '_charm_position_images', $position_images);
         
-        // Save product letter colors
-        if (isset($_POST['_product_letter_colors']) && is_array($_POST['_product_letter_colors'])) {
-            $selected_colors = array_map('sanitize_text_field', $_POST['_product_letter_colors']);
-            update_post_meta($post_id, '_product_letter_colors', $selected_colors);
+        // Save product letter colors - handle both selection and removal
+        // Save product letter colors (supports clearing all selections)
+        // Save product letter colors — only if the active panel submitted this field
+        if (isset($_POST['_product_letter_colors_submitted'])) {
+            $selected = isset($_POST['_product_letter_colors']) ? (array) $_POST['_product_letter_colors'] : [];
+            $selected = array_values(array_filter(array_map('sanitize_text_field', $selected), 'strlen'));
+
+            if (!empty($selected)) {
+                update_post_meta($post_id, '_product_letter_colors', $selected);
+            } else {
+                // User cleared all selections
+                delete_post_meta($post_id, '_product_letter_colors');
+            }
+        }
+        // If the hidden marker is absent, do nothing (prevents hidden panels from clobbering).
+
+        // If the hidden "_submitted" flag isn't present, do nothing (field wasn't rendered/submitted).
+
+        // Note: If hidden field is not in POST, we don't modify the meta (form wasn't submitted with letter colors field)
+        
+        // Save customizable checkbox for all bracelet product types
+        if (isset($_POST['_bracelet_customizable'])) {
+            update_post_meta($post_id, '_bracelet_customizable', 'yes');
         } else {
-            // If no colors selected, remove the meta
-            delete_post_meta($post_id, '_product_letter_colors');
+            // Only set to 'no' if it was previously saved - for new products, leave as default 'yes'
+            $existing_value = get_post_meta($post_id, '_bracelet_customizable', true);
+            if ($existing_value !== '') {
+                // Meta exists, so user unchecked it
+                update_post_meta($post_id, '_bracelet_customizable', 'no');
+            } else {
+                // Meta doesn't exist, set default value based on product type
+                $product_type = isset($_POST['product-type']) ? $_POST['product-type'] : get_post_meta($post_id, '_product_type', true);
+                if (in_array($product_type, ['standard_bracelet', 'bracelet_collabs', 'bracelet_no_words', 'tiny_words'])) {
+                    update_post_meta($post_id, '_bracelet_customizable', 'yes');
+                }
+            }
+        }
+        
+        // Ensure customizable meta is set for bracelet product types when first switching to them
+        $current_product_type = isset($_POST['product-type']) ? $_POST['product-type'] : get_post_meta($post_id, '_product_type', true);
+        if (in_array($current_product_type, ['standard_bracelet', 'bracelet_collabs', 'bracelet_no_words', 'tiny_words'])) {
+            $existing_customizable = get_post_meta($post_id, '_bracelet_customizable', true);
+            if ($existing_customizable === '') {
+                // First time saving this product type, set default value
+                update_post_meta($post_id, '_bracelet_customizable', 'yes');
+            }
+        }
+        
+        // Save Bracelet No Words data
+        if (isset($_POST['_product_main_image'])) {
+            update_post_meta($post_id, '_product_main_image', sanitize_text_field($_POST['_product_main_image']));
+        }
+        
+        if (isset($_POST['_product_main_url'])) {
+            update_post_meta($post_id, '_product_main_url', esc_url_raw($_POST['_product_main_url']));
+        }
+        
+        // Auto-fill URL when no words image is uploaded
+        $no_words_image_id = isset($_POST['_product_main_image']) ? $_POST['_product_main_image'] : '';
+        $no_words_url = isset($_POST['_product_main_url']) ? $_POST['_product_main_url'] : '';
+        
+        if ($no_words_image_id && empty($no_words_url)) {
+            $auto_url = wp_get_attachment_url($no_words_image_id);
+            if ($auto_url) {
+                update_post_meta($post_id, '_product_main_url', $auto_url);
+            }
+        }
+        
+        // Save Tiny Words data
+        
+        if (isset($_POST['_tiny_words_is_bestseller'])) {
+            update_post_meta($post_id, '_tiny_words_is_bestseller', 'yes');
+        } else {
+            update_post_meta($post_id, '_tiny_words_is_bestseller', 'no');
+        }
+        
+        if (isset($_POST['_product_main_image'])) {
+            update_post_meta($post_id, '_product_main_image', sanitize_text_field($_POST['_product_main_image']));
+        }
+        
+        if (isset($_POST['_product_main_url'])) {
+            update_post_meta($post_id, '_product_main_url', esc_url_raw($_POST['_product_main_url']));
+        }
+        
+        // Auto-fill URL when tiny words image is uploaded
+        $tiny_words_image_id = isset($_POST['_product_main_image']) ? $_POST['_product_main_image'] : '';
+        $tiny_words_url = isset($_POST['_product_main_url']) ? $_POST['_product_main_url'] : '';
+        
+        if ($tiny_words_image_id && empty($tiny_words_url)) {
+            $auto_url = wp_get_attachment_url($tiny_words_image_id);
+            if ($auto_url) {
+                update_post_meta($post_id, '_product_main_url', $auto_url);
+            }
+        }
+        
+        
+        // Save tiny words gap images and URLs (1-10 characters) following Standard Bracelet pattern
+        for ($i = 1; $i <= 10; $i++) {
+            // Save gap image ID
+            if (isset($_POST["_tiny_words_gap_image_{$i}char"])) {
+                update_post_meta($post_id, "_tiny_words_gap_image_{$i}char", sanitize_text_field($_POST["_tiny_words_gap_image_{$i}char"]));
+            }
+            
+            // Save gap URL
+            if (isset($_POST["_tiny_words_gap_url_{$i}char"])) {
+                update_post_meta($post_id, "_tiny_words_gap_url_{$i}char", esc_url_raw($_POST["_tiny_words_gap_url_{$i}char"]));
+            }
+            
+            // Auto-fill URL when gap image is uploaded
+            $gap_image_id = isset($_POST["_tiny_words_gap_image_{$i}char"]) ? $_POST["_tiny_words_gap_image_{$i}char"] : '';
+            $gap_url = isset($_POST["_tiny_words_gap_url_{$i}char"]) ? $_POST["_tiny_words_gap_url_{$i}char"] : '';
+            
+            if ($gap_image_id && empty($gap_url)) {
+                $auto_url = wp_get_attachment_url($gap_image_id);
+                if ($auto_url) {
+                    update_post_meta($post_id, "_tiny_words_gap_url_{$i}char", $auto_url);
+                }
+            }
         }
     }
     
@@ -420,12 +768,14 @@ class Bracelet_Customizer_Product_Types {
         $image_id = get_post_meta($product_id, $meta_key, true);
         $uploaded_image_url = $image_id ? wp_get_attachment_url($image_id) : '';
         
-        // Check for external URL
+        // Check for external URL using consistent meta keys
         $external_url = '';
-        if ($meta_key === '_charm_main_image') {
-            $external_url = get_post_meta($product_id, '_charm_main_url', true);
-        } elseif ($meta_key === '_collabs_main_image') {
-            $external_url = get_post_meta($product_id, '_collabs_main_url', true);
+        if ($meta_key === '_product_main_image') {
+            $external_url = get_post_meta($product_id, '_product_main_url', true);
+        } elseif (strpos($meta_key, '_tiny_words_gap_image_') !== false) {
+            // Get the corresponding URL field for tiny words gap images
+            $url_meta_key = str_replace('_tiny_words_gap_image_', '_tiny_words_gap_url_', $meta_key);
+            $external_url = get_post_meta($product_id, $url_meta_key, true);
         }
         
         // Determine which image to show (external URL takes precedence)
@@ -480,6 +830,31 @@ class Bracelet_Customizer_Product_Types {
     }
     
     /**
+     * Add custom handling for checkbox default values
+     */
+    public function add_checkbox_default_handling() {
+        global $post;
+        
+        if (!$post || $post->post_type !== 'product') {
+            return;
+        }
+        
+        $product_type = get_post_meta($post->ID, '_product_type', true);
+        $customizable_value = get_post_meta($post->ID, '_bracelet_customizable', true);
+        
+        // If this is a bracelet product type and no meta value exists, set the checkbox as checked
+        if (in_array($product_type, ['standard_bracelet', 'bracelet_collabs', 'bracelet_no_words', 'tiny_words']) && $customizable_value === '') {
+            ?>
+            <script type="text/javascript">
+            jQuery(document).ready(function($) {
+                $('#_bracelet_customizable').prop('checked', true);
+            });
+            </script>
+            <?php
+        }
+    }
+    
+    /**
      * Add JavaScript for product type functionality
      */
     public function add_product_type_js() {
@@ -492,21 +867,30 @@ class Bracelet_Customizer_Product_Types {
         ?>
         <script type="text/javascript">
         jQuery(document).ready(function($) {
+
 			// Show/hide tabs based on product type
 			function toggleProductTypeTabs() {
 				var productType = $('#product-type').val();
+                // Disable all duplicates first
+                $('.letter-colors-field select[name="_product_letter_colors[]"]').prop('disabled', true);
+                $('.letter-colors-field input[name="_product_letter_colors_submitted"]').prop('disabled', true);
+
+                // Enable only the visible panel’s controls
+                $('.woocommerce_options_panel:visible .letter-colors-field select[name="_product_letter_colors[]"]').prop('disabled', false);
+                $('.woocommerce_options_panel:visible .letter-colors-field input[name="_product_letter_colors_submitted"]').prop('disabled', false);
+
 				
-				// Hide all custom tabs
-				$('.charm_config_tab').hide();
-				$('.show_if_standard_bracelet, .show_if_charm, .show_if_bracelet_collabs').hide();
+				// Let WooCommerce handle tab visibility via show_if_* classes naturally
+				// No manual hiding needed - WooCommerce will show/hide based on product type
 				
 				// For all custom product types, show general tab fields (like simple products)
-				if (productType === 'standard_bracelet' || productType === 'charm' || productType === 'bracelet_collabs') {
+				if (productType === 'standard_bracelet' || productType === 'charm' || productType === 'bracelet_collabs' || productType === 'bracelet_no_words' || productType === 'tiny_words') {
 					$('.general_options').show();
 					$('.show_if_simple').show();
 					$('.pricing').show();
 					$('._regular_price_field, ._sale_price_field').show();
 					$('.sale_price_dates_fields').show();
+					$('li.general_tab').show();
 					
 					// Hide Virtual and Downloadable checkboxes for custom product types
 					$('label[for="_virtual"], label[for="_downloadable"]').hide();
@@ -514,15 +898,8 @@ class Bracelet_Customizer_Product_Types {
 					$('.show_if_virtual, .show_if_downloadable').hide();
 				}
 				
-				// Show relevant tabs
-				if (productType === 'standard_bracelet') {
-					$('.show_if_standard_bracelet').show();
-				} else if (productType === 'bracelet_collabs') {
-					$('.show_if_bracelet_collabs').show();
-				} else if (productType === 'charm') {
-					$('.charm_config_tab').show();
-					$('.show_if_charm').show();
-				}
+				// Let WooCommerce handle all tab visibility via show_if_* classes naturally
+				// No manual tab showing/hiding needed - WooCommerce will handle this automatically
 			}
             
             // Initial toggle
@@ -623,6 +1000,10 @@ class Bracelet_Customizer_Product_Types {
             return 'WC_Product_Standard_Bracelet';
         } elseif ($product_type === 'bracelet_collabs') {
             return 'WC_Product_Bracelet_Collabs';
+        } elseif ($product_type === 'bracelet_no_words') {
+            return 'WC_Product_Bracelet_No_Words';
+        } elseif ($product_type === 'tiny_words') {
+            return 'WC_Product_Tiny_Words';
         } elseif ($product_type === 'charm') {
             return 'WC_Product_Charm';
         }

@@ -11,7 +11,9 @@
 ._bracelet_main_charm_image_field label,
 [class*="_bracelet_gap_image_"][class*="char_field"] label,
 [class*="_space_stone_pos_"][class*="_field"] label,
-[class*="_charm_position_image_"][class*="_field"] label {
+[class*="_charm_position_image_"][class*="_field"] label,
+._product_main_image_field label,
+.letter-colors-field label {
     float: none !important;
     width: auto !important;
     margin: 0 0 5px 0 !important;
@@ -19,6 +21,10 @@
     display: block !important;
     font-weight: 600;
     color: #23282d;
+}
+
+.hide_if_charm {
+    display: none !important;
 }
 
 /* Ensure form fields have proper spacing */

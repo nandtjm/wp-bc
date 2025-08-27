@@ -1,6 +1,6 @@
 <?php
 /**
- * WooCommerce Product Type: Bracelet Collabs
+ * WooCommerce Product Type: Bracelet - No Words
  * 
  * @package Bracelet_Customizer
  * @since 1.0.0
@@ -12,19 +12,19 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * WC Product Bracelet Collabs
+ * WC Product Bracelet No Words
  * 
- * Custom WooCommerce product type for Bracelet Collabs products.
- * This extends the simple product type with custom fields for collaboration bracelets.
+ * Custom WooCommerce product type for Bracelet No Words products.
+ * This extends the simple product type with custom fields for no words bracelets.
  */
-class WC_Product_Bracelet_Collabs extends WC_Product_Simple {
+class WC_Product_Bracelet_No_Words extends WC_Product_Simple {
     
     /**
      * Product type
      * 
      * @var string
      */
-    protected $product_type = 'bracelet_collabs';
+    protected $product_type = 'bracelet_no_words';
     
     /**
      * Constructor
@@ -41,7 +41,7 @@ class WC_Product_Bracelet_Collabs extends WC_Product_Simple {
      * @return string
      */
     public function get_type() {
-        return 'bracelet_collabs';
+        return 'bracelet_no_words';
     }
     
     /**
@@ -55,20 +55,20 @@ class WC_Product_Bracelet_Collabs extends WC_Product_Simple {
     }
     
     /**
-     * Get collabs main image URL
+     * Get bracelet no words main image URL
      *
      * @return string
      */
-    public function get_collabs_main_url() {
+    public function get_no_words_main_url() {
         return get_post_meta($this->get_id(), '_product_main_url', true);
     }
     
     /**
-     * Get collabs main image ID
+     * Get bracelet no words main image ID
      *
      * @return int
      */
-    public function get_collabs_main_image() {
+    public function get_no_words_main_image() {
         return get_post_meta($this->get_id(), '_product_main_image', true);
     }
     
@@ -78,12 +78,12 @@ class WC_Product_Bracelet_Collabs extends WC_Product_Simple {
      * @return string
      */
     public function get_main_image_url() {
-        $external_url = $this->get_collabs_main_url();
+        $external_url = $this->get_no_words_main_url();
         if (!empty($external_url)) {
             return $external_url;
         }
         
-        $image_id = $this->get_collabs_main_image();
+        $image_id = $this->get_no_words_main_image();
         if ($image_id) {
             return wp_get_attachment_url($image_id);
         }
@@ -92,11 +92,11 @@ class WC_Product_Bracelet_Collabs extends WC_Product_Simple {
     }
     
     /**
-     * Check if product has required collabs configuration
+     * Check if product has required no words configuration
      *
      * @return bool
      */
-    public function has_collabs_configuration() {
+    public function has_no_words_configuration() {
         return !empty($this->get_main_image_url());
     }
     
@@ -106,7 +106,9 @@ class WC_Product_Bracelet_Collabs extends WC_Product_Simple {
      * @return bool
      */
     public function is_customizable() {
-        return $this->get_meta('_bracelet_customizable') === 'yes';
+        $value = $this->get_meta('_bracelet_customizable');
+        // Default to 'yes' if meta doesn't exist
+        return $value === 'yes' || $value === '';
     }
     
     /**
@@ -120,10 +122,10 @@ class WC_Product_Bracelet_Collabs extends WC_Product_Simple {
             'name' => $this->get_name(),
             'price' => (float) $this->get_price(),
             'image' => $this->get_main_image_url(),
-            'category' => 'collabs',
-            'type' => 'bracelet_collabs',
+            'category' => 'no_words',
+            'type' => 'bracelet_no_words',
             'customizable' => $this->is_customizable(),
-            'available_sizes' => ['One Size'], // Collabs typically come in one size
+            'available_sizes' => ['XS', 'S/M', 'M/L', 'L/XL'],
             'description' => $this->get_description(),
             'short_description' => $this->get_short_description()
         ];
@@ -137,7 +139,7 @@ class WC_Product_Bracelet_Collabs extends WC_Product_Simple {
     public function is_purchasable() {
         return apply_filters('woocommerce_is_purchasable', $this->exists() && 
             'publish' === $this->get_status() && 
-            $this->has_collabs_configuration(), $this);
+            $this->has_no_words_configuration(), $this);
     }
     
     /**

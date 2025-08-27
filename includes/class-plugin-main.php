@@ -93,13 +93,11 @@ class Bracelet_Customizer_Main {
         if (is_admin()) {
             require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'admin/class-admin.php';
             require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'admin/class-product-meta-fields.php';
+            require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/debug-cart-thumbnails.php';
         }
         
-        // Public includes
-        if (!is_admin()) {
-            require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'public/class-public.php';
-            require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'public/shortcodes.php';
-        }
+        // Shortcodes
+        require_once BRACELET_CUSTOMIZER_PLUGIN_PATH . 'includes/class-shortcodes.php';
         
         // Initialize classes
         $this->init_classes();
@@ -139,15 +137,9 @@ class Bracelet_Customizer_Main {
             new Bracelet_Customizer_Admin();
         }
         
-        // Public classes
-        if (!is_admin()) {
-            if (class_exists('Bracelet_Customizer_Public')) {
-                new Bracelet_Customizer_Public();
-            }
-            
-            if (class_exists('Bracelet_Customizer_Shortcodes')) {
-                new Bracelet_Customizer_Shortcodes();
-            }
+        // Initialize shortcodes
+        if (class_exists('Bracelet_Customizer_Shortcodes')) {
+            new Bracelet_Customizer_Shortcodes();
         }
     }
     
@@ -160,9 +152,6 @@ class Bracelet_Customizer_Main {
         
         // Initialize WooCommerce hooks
         $this->init_woocommerce_hooks();
-        
-        // Check if React app is built
-        $this->check_react_build();
     }
     
     /**
@@ -193,21 +182,6 @@ class Bracelet_Customizer_Main {
         
         // Add product type options
         add_filter('product_type_options', [$this, 'product_type_options']);
-    }
-    
-    /**
-     * Check if React app is built
-     */
-    private function check_react_build() {
-        $build_path = BRACELET_CUSTOMIZER_PLUGIN_PATH . 'bracelet-customizer/build';
-        if (!file_exists($build_path) && current_user_can('manage_options')) {
-            add_action('admin_notices', function() {
-                echo '<div class="notice notice-warning">';
-                echo '<p><strong>' . __('Bracelet Customizer', 'bracelet-customizer') . '</strong>: ';
-                echo __('React app is not built. Please run "npm run build" in the bracelet-customizer directory.', 'bracelet-customizer');
-                echo '</p></div>';
-            });
-        }
     }
     
     /**
@@ -301,11 +275,28 @@ class Bracelet_Customizer_Main {
             return true;
         }
         
-        // Load on single product pages with bracelet products
-        if (is_product()) {
-            global $product;
-            if ($product && (has_term('standard_bracelet', 'product_type', $product->get_id()) || has_term('bracelet_collabs', 'product_type', $product->get_id()))) {
-                return true;
+        // 2) Load on single product pages for customizable bracelet products
+        if (function_exists('is_product') && is_product()) {
+            // Get the current product id from the query (works even before the global $product is set)
+            $product_id = get_queried_object_id();
+            if (!$product_id && $post instanceof WP_Post) {
+                $product_id = (int) $post->ID;
+            }
+
+            if ($product_id) {
+                // Always get a proper WC_Product object
+                $product = wc_get_product($product_id);
+                if ($product instanceof WC_Product) {
+                    $is_customizable = get_post_meta($product_id, '_bracelet_customizable', true);
+
+                    // Default to true for bracelet product types if meta not set
+                    if (
+                        $is_customizable === 'yes' ||
+                        ($is_customizable === '' && $this->is_bracelet_product_type($product->get_type()))
+                    ) {
+                        return true;
+                    }
+                }
             }
         }
         
@@ -321,6 +312,14 @@ class Bracelet_Customizer_Main {
         }
         
         return false;
+    }
+    
+    /**
+     * Check if product type is a bracelet product type
+     */
+    private function is_bracelet_product_type($product_type) {
+        $bracelet_types = ['standard_bracelet', 'bracelet_collabs', 'bracelet_no_words', 'tiny_words'];
+        return in_array($product_type, $bracelet_types);
     }
     
     /**
@@ -412,6 +411,7 @@ class Bracelet_Customizer_Main {
                 'uploadUrl' => wp_upload_dir()['baseurl'],
                 'settings' => $settings,
                 'customizerPageUrl' => $customizer_page_url,
+                'siteName' => get_bloginfo('name'),
                 'woocommerce' => [
                     'cartUrl' => wc_get_cart_url(),
                     'checkoutUrl' => wc_get_checkout_url(),
@@ -439,6 +439,8 @@ class Bracelet_Customizer_Main {
             return 'WC_Product_Charm';
         } elseif ($product_type === 'bracelet_collabs') {
             return 'WC_Product_Bracelet_Collabs';
+        } elseif ($product_type === 'tiny_words') {
+            return 'WC_Product_Tiny_Words';
         }
         return $classname;
     }
@@ -449,7 +451,7 @@ class Bracelet_Customizer_Main {
     public function product_type_options($options) {
         $options['bracelet_customizable'] = [
             'id' => '_bracelet_customizable',
-            'wrapper_class' => 'show_if_standard_bracelet show_if_bracelet_collabs',
+            'wrapper_class' => 'show_if_standard_bracelet show_if_bracelet_collabs show_if_bracelet_no_words show_if_tiny_words',
             'label' => __('Customizable', 'bracelet-customizer'),
             'description' => __('Enable bracelet customization for this product', 'bracelet-customizer'),
             'default' => 'yes'

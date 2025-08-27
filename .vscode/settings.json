@@ -1,0 +1,7 @@
+{
+    "phpsab.snifferArguments": [
+        {
+            "phpcs.enable": false,
+        }
+    ],
+}

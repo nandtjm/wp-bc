@@ -83,18 +83,22 @@ function bracelet_customizer_init() {
 
 // Initialize on plugins_loaded to ensure WooCommerce is loaded
 add_action('plugins_loaded', 'bracelet_customizer_init', 20);
+add_action('init', function()
+{
+    // // Load textdomain early for activation messages
+    // load_plugin_textdomain(
+    //     'bracelet-customizer',
+    //     false,
+    //     dirname(BRACELET_CUSTOMIZER_PLUGIN_BASENAME) . '/languages'
+    // );
+});
 
 /**
  * Plugin activation hook
  */
 register_activation_hook(__FILE__, 'bracelet_customizer_activate');
 function bracelet_customizer_activate() {
-    // Load textdomain early for activation messages
-    load_plugin_textdomain(
-        'bracelet-customizer',
-        false,
-        dirname(BRACELET_CUSTOMIZER_PLUGIN_BASENAME) . '/languages'
-    );
+    
     
     // Check dependencies before activation
     if (!bracelet_customizer_check_php_version()) {
@@ -171,16 +175,4 @@ function bracelet_customizer_activation_redirect() {
             exit;
         }
     }
-}
-
-/**
- * Load plugin textdomain for translations
- */
-add_action('plugins_loaded', 'bracelet_customizer_load_textdomain', 10);
-function bracelet_customizer_load_textdomain() {
-    load_plugin_textdomain(
-        'bracelet-customizer',
-        false,
-        dirname(BRACELET_CUSTOMIZER_PLUGIN_BASENAME) . '/languages'
-    );
 }

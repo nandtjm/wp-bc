@@ -33,7 +33,7 @@ class Bracelet_Customizer_Product_Meta_Fields {
         $tabs['bracelet_customizer'] = [
             'label' => __('Bracelet Customizer', 'bracelet-customizer'),
             'target' => 'bracelet_customizer_product_data',
-            'class' => ['show_if_standard_bracelet'],
+            'class' => ['show_if_standard_bracelet', 'hide_if_charm'],
             'priority' => 21
         ];
         
@@ -56,6 +56,13 @@ class Bracelet_Customizer_Product_Meta_Fields {
             'target' => 'charm_positions_product_data',
             'class' => ['show_if_charm'],
             'priority' => 24
+        ];
+        
+        $tabs['charm_pos_nowords'] = [
+            'label' => __('Charm Pos - NoWords', 'bracelet-customizer'),
+            'target' => 'charm_pos_nowords_product_data',
+            'class' => ['show_if_charm'],
+            'priority' => 25
         ];
         
         return $tabs;
@@ -93,6 +100,14 @@ class Bracelet_Customizer_Product_Meta_Fields {
         echo '<div id="charm_positions_product_data" class="panel woocommerce_options_panel" style="padding: 20px;">';
 
         $this->render_charm_positions_fields($post->ID);
+        
+        
+        echo '</div>';
+        
+        // Charm Pos - NoWords Panel
+        echo '<div id="charm_pos_nowords_product_data" class="panel woocommerce_options_panel" style="padding: 20px;">';
+
+        $this->render_charm_pos_nowords_fields($post->ID);
         
         
         echo '</div>';
@@ -441,6 +456,56 @@ class Bracelet_Customizer_Product_Meta_Fields {
     }
     
     /**
+     * Render charm positions fields for NoWords products (charm pos nowords tab)
+     */
+    private function render_charm_pos_nowords_fields($product_id) {
+        // Position Images for 7 positions on bracelet with URL options for NoWords products
+        echo '<div class="options_group">';
+        echo '<h3>' . __('Charm Position Images - NoWords', 'bracelet-customizer') . '</h3>';
+        echo '<p class="description">' . __('Upload charm images for different positions on the bracelet for NoWords products (1-7). Use WordPress media library or enter external CDN/Cloud URLs.', 'bracelet-customizer') . '</p>';
+        
+        for ($pos = 1; $pos <= 7; $pos++) {
+            echo '<div class="position-image-group" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;">';
+            echo '<h4 style="margin: 0 0 10px 0;">' . sprintf(__('NoWords Position %d', 'bracelet-customizer'), $pos) . '</h4>';
+            
+            // Get current values
+            $position_image_id = get_post_meta($product_id, "_nowords_charm_position_image_{$pos}", true);
+            $position_url = get_post_meta($product_id, "_nowords_charm_position_url_{$pos}", true);
+            
+            // Auto-fill URL if image is uploaded but URL is empty
+            if ($position_image_id && empty($position_url)) {
+                $position_url = wp_get_attachment_url($position_image_id);
+            }
+            
+            // Image URL field
+            woocommerce_wp_text_input([
+                'id' => "_nowords_charm_position_url_{$pos}",
+                'label' => sprintf(__('NoWords Position %d Image URL', 'bracelet-customizer'), $pos),
+                'description' => sprintf(__('Image URL for NoWords position %d (auto-filled when uploaded via WordPress, or enter external CDN/Cloud URL)', 'bracelet-customizer'), $pos),
+                'desc_tip' => true,
+                'value' => $position_url,
+                'wrapper_class' => 'form-row form-row-wide',
+                'type' => 'url',
+                'custom_attributes' => [
+                    'placeholder' => "https://example.com/charm-nowords-pos-{$pos}.webp",
+                    'data-auto-fill-field' => "_nowords_charm_position_image_{$pos}"
+                ]
+            ]);
+            
+            // Image upload field
+            $this->render_image_field(
+                $product_id, 
+                "_nowords_charm_position_image_{$pos}", 
+                sprintf(__('Upload NoWords Position %d Image', 'bracelet-customizer'), $pos)
+            );
+            
+            echo '</div>';
+        }
+        
+        echo '</div>';
+    }
+    
+    /**
      * Render an image upload field
      */
     private function render_image_field($product_id, $meta_key, $label) {
@@ -462,6 +527,10 @@ class Bracelet_Customizer_Product_Meta_Fields {
         } elseif (strpos($meta_key, '_charm_position_image_') !== false) {
             // Get the corresponding URL field for charm positions
             $url_meta_key = str_replace('_charm_position_image_', '_charm_position_url_', $meta_key);
+            $external_url = get_post_meta($product_id, $url_meta_key, true);
+        } elseif (strpos($meta_key, '_nowords_charm_position_image_') !== false) {
+            // Get the corresponding URL field for NoWords charm positions
+            $url_meta_key = str_replace('_nowords_charm_position_image_', '_nowords_charm_position_url_', $meta_key);
             $external_url = get_post_meta($product_id, $url_meta_key, true);
         }
         
@@ -614,6 +683,23 @@ class Bracelet_Customizer_Product_Meta_Fields {
                     $auto_url = wp_get_attachment_url($position_image_id);
                     if ($auto_url) {
                         update_post_meta($product_id, "_charm_position_url_{$pos}", $auto_url);
+                    }
+                }
+            }
+            
+            // Save NoWords position images and URLs
+            for ($pos = 1; $pos <= 7; $pos++) {
+                $this->save_meta_field($product_id, "_nowords_charm_position_image_{$pos}");
+                $this->save_meta_field($product_id, "_nowords_charm_position_url_{$pos}");
+                
+                // Auto-fill URL when NoWords position image is uploaded
+                $nowords_position_image_id = isset($_POST["_nowords_charm_position_image_{$pos}"]) ? $_POST["_nowords_charm_position_image_{$pos}"] : '';
+                $nowords_position_url = isset($_POST["_nowords_charm_position_url_{$pos}"]) ? $_POST["_nowords_charm_position_url_{$pos}"] : '';
+                
+                if ($nowords_position_image_id && empty($nowords_position_url)) {
+                    $auto_url = wp_get_attachment_url($nowords_position_image_id);
+                    if ($auto_url) {
+                        update_post_meta($product_id, "_nowords_charm_position_url_{$pos}", $auto_url);
                     }
                 }
             }
