@@ -49,6 +49,9 @@ class Bracelet_Customizer_WooCommerce {
         add_filter('woocommerce_order_item_thumbnail', [$this, 'custom_order_item_thumbnail'], 10, 3);
         add_filter('woocommerce_email_order_item_thumbnail', [$this, 'custom_email_order_item_thumbnail'], 10, 3);
         
+        // Hide internal meta keys from order display
+        add_filter('woocommerce_hidden_order_itemmeta', [$this, 'hide_internal_order_meta']);
+        
         // Order hooks
         add_action('woocommerce_checkout_create_order_line_item', [$this, 'add_customization_to_order_item'], 10, 4);
         add_action('woocommerce_order_item_meta_end', [$this, 'display_customization_in_order'], 10, 3);
@@ -285,7 +288,15 @@ class Bracelet_Customizer_WooCommerce {
             
             // Save custom image URL if available
             if (isset($values['custom_image_url'])) {
+                // Save as hidden meta for internal use
                 $item->add_meta_data('_custom_image_url', $values['custom_image_url']);
+                
+                // Add visible preview link for order display
+                $preview_link = sprintf('<a href="%s" target="_blank">%s</a>', 
+                    esc_url($values['custom_image_url']), 
+                    __('View Preview', 'bracelet-customizer')
+                );
+                $item->add_meta_data(__('Preview', 'bracelet-customizer'), $preview_link);
             }
             
             // Add individual meta for easy access
@@ -500,21 +511,13 @@ class Bracelet_Customizer_WooCommerce {
      * Generate custom cart item thumbnail
      */
     public function custom_cart_item_thumbnail($thumbnail, $cart_item, $cart_item_key) {
-        error_log('Cart item thumbnail called for key: ' . $cart_item_key);
-        error_log('Cart item data: ' . print_r($cart_item, true));
-        
         if (isset($cart_item['bracelet_customization'])) {
-            error_log('Bracelet customization found in cart item');
-            
             // Try to use pre-generated image URL first
             $custom_image_url = $cart_item['custom_image_url'] ?? null;
-            error_log('Custom image URL from cart item: ' . ($custom_image_url ?? 'null'));
             
             // If not available, generate it now
             if (!$custom_image_url) {
-                error_log('No custom image URL found, trying to generate...');
                 $custom_image_url = $this->generate_customization_image($cart_item['bracelet_customization'], $cart_item);
-                error_log('Generated image URL: ' . ($custom_image_url ?? 'null'));
             }
             
             if ($custom_image_url) {
@@ -523,12 +526,7 @@ class Bracelet_Customizer_WooCommerce {
                     esc_url($custom_image_url), 
                     esc_attr($product_name)
                 );
-                error_log('Custom thumbnail generated: ' . $thumbnail);
-            } else {
-                error_log('No custom image URL available, using default thumbnail');
             }
-        } else {
-            error_log('No bracelet customization found in cart item');
         }
         return $thumbnail;
     }
@@ -685,6 +683,14 @@ class Bracelet_Customizer_WooCommerce {
         return false;
     }
     
+    /**
+     * Hide internal meta keys from order display
+     */
+    public function hide_internal_order_meta($hidden_meta_keys) {
+        $hidden_meta_keys[] = '_custom_image_url';
+        $hidden_meta_keys[] = '_bracelet_customization';
+        return $hidden_meta_keys;
+    }
     
     /**
      * Validate customization data
