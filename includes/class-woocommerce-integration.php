@@ -52,6 +52,14 @@ class Bracelet_Customizer_WooCommerce {
         // Hide internal meta keys from order display
         add_filter('woocommerce_hidden_order_itemmeta', [$this, 'hide_internal_order_meta']);
         
+        // Handle special preview cart items
+        add_filter('woocommerce_cart_item_name', [$this, 'customize_preview_cart_item_name'], 10, 3);
+        add_filter('woocommerce_cart_item_price', [$this, 'hide_preview_item_price'], 10, 3);
+        add_action('woocommerce_cart_item_removed', [$this, 'cleanup_preview_product']);
+        
+        // Prevent preview items from being added to orders
+        add_action('woocommerce_checkout_create_order_line_item', [$this, 'handle_preview_item_checkout'], 1, 4);
+        
         // Order hooks
         add_action('woocommerce_checkout_create_order_line_item', [$this, 'add_customization_to_order_item'], 10, 4);
         add_action('woocommerce_order_item_meta_end', [$this, 'display_customization_in_order'], 10, 3);
@@ -491,19 +499,224 @@ class Bracelet_Customizer_WooCommerce {
             $cart_item_data['variation_data'] = $variation_data;
         }
         
-        // Add to cart
-        $cart_item_key = WC()->cart->add_to_cart($product_id, $quantity, 0, [], $cart_item_data);
+        $added_items = [];
         
-        if ($cart_item_key) {
-            error_log('Successfully added to cart with key: ' . $cart_item_key);
-            wp_send_json_success([
-                'message' => __('Bracelet added to cart!', 'bracelet-customizer'),
-                'cart_url' => wc_get_cart_url(),
-                'cart_item_key' => $cart_item_key
-            ]);
-        } else {
-            error_log('Failed to add to cart for product_id: ' . $product_id . ' with data: ' . print_r($cart_item_data, true));
+        // Add main bracelet to cart
+        $main_cart_item_key = WC()->cart->add_to_cart($product_id, $quantity, 0, [], $cart_item_data);
+        
+        if (!$main_cart_item_key) {
+            error_log('Failed to add main bracelet to cart for product_id: ' . $product_id);
             wp_send_json_error(['message' => __('Failed to add bracelet to cart.', 'bracelet-customizer')]);
+        }
+        
+        $added_items[] = $main_cart_item_key;
+        error_log('Successfully added main bracelet to cart with key: ' . $main_cart_item_key);
+        
+        // Add charms as separate products if selected
+        if (isset($customization_data['selectedCharms']) && !empty($customization_data['selectedCharms'])) {
+            foreach ($customization_data['selectedCharms'] as $charm) {
+                $charm_product_id = $this->get_charm_product_id($charm['name']);
+                if ($charm_product_id) {
+                    $charm_cart_key = WC()->cart->add_to_cart(
+                        $charm_product_id, 
+                        1, // quantity = 1 for each charm
+                        0, 
+                        [], 
+                        [
+                            'charm_customization' => $charm,
+                            'parent_customization_id' => $customization_id,
+                            'unique_key' => md5($charm['name'] . $customization_id . microtime())
+                        ]
+                    );
+                    
+                    if ($charm_cart_key) {
+                        $added_items[] = $charm_cart_key;
+                        error_log('Added charm to cart: ' . $charm['name'] . ' with key: ' . $charm_cart_key);
+                    } else {
+                        error_log('Failed to add charm to cart: ' . $charm['name']);
+                    }
+                }
+            }
+        }
+        
+        // Add "View Preview" virtual cart item with screenshot
+        if (isset($product_data['custom_image_url'])) {
+            $preview_cart_key = $this->add_preview_cart_item($customization_id, $product_data['custom_image_url']);
+            if ($preview_cart_key) {
+                $added_items[] = $preview_cart_key;
+                error_log('Added preview item to cart with key: ' . $preview_cart_key);
+            }
+        }
+        
+        wp_send_json_success([
+            'message' => __('Bracelet and charms added to cart!', 'bracelet-customizer'),
+            'cart_url' => wc_get_cart_url(),
+            'cart_items' => $added_items,
+            'main_item_key' => $main_cart_item_key
+        ]);
+    }
+    
+    /**
+     * Get charm product ID by charm name
+     */
+    private function get_charm_product_id($charm_name) {
+        global $wpdb;
+        
+        // First try to find by exact product title
+        $product_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'product' AND post_status = 'publish' AND post_title = %s LIMIT 1",
+            $charm_name
+        ));
+        
+        if ($product_id) {
+            // Verify it's a charm product type
+            $product_type = get_post_meta($product_id, '_product_type', true);
+            if ($product_type === 'charm') {
+                return $product_id;
+            }
+        }
+        
+        // Fallback: search by title similarity for charm products
+        $product_id = $wpdb->get_var($wpdb->prepare(
+            "SELECT p.ID FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+             WHERE p.post_type = 'product' 
+             AND p.post_status = 'publish'
+             AND pm.meta_key = '_product_type' 
+             AND pm.meta_value = 'charm'
+             AND p.post_title LIKE %s 
+             LIMIT 1",
+            '%' . $wpdb->esc_like($charm_name) . '%'
+        ));
+        
+        // If still not found, create a simple charm product dynamically
+        if (!$product_id) {
+            $product_id = $this->create_charm_product($charm_name);
+        }
+        
+        return $product_id;
+    }
+    
+    /**
+     * Create a simple charm product if one doesn't exist
+     */
+    private function create_charm_product($charm_name) {
+        $product = new WC_Product_Simple();
+        $product->set_name($charm_name);
+        $product->set_description(sprintf(__('Charm: %s', 'bracelet-customizer'), $charm_name));
+        $product->set_short_description(__('Custom Bracelet Charm', 'bracelet-customizer'));
+        $product->set_price(14); // Default charm price
+        $product->set_regular_price(14);
+        $product->set_catalog_visibility('hidden');
+        $product->set_virtual(true);
+        
+        $product_id = $product->save();
+        
+        if ($product_id) {
+            // Set product type as charm
+            update_post_meta($product_id, '_product_type', 'charm');
+        }
+        
+        return $product_id;
+    }
+    
+    /**
+     * Add "View Preview" virtual cart item
+     */
+    private function add_preview_cart_item($customization_id, $screenshot_url) {
+        // Create a virtual product for the preview
+        $preview_product = new WC_Product_Simple();
+        $preview_product->set_virtual(true);
+        $preview_product->set_downloadable(false);
+        $preview_product->set_name(__('View Preview', 'bracelet-customizer'));
+        $preview_product->set_description(__('Click to view your custom bracelet preview', 'bracelet-customizer'));
+        $preview_product->set_short_description(__('Custom Bracelet Preview', 'bracelet-customizer'));
+        $preview_product->set_price(0);
+        $preview_product->set_regular_price(0);
+        $preview_product->set_catalog_visibility('hidden');
+        $preview_product->set_status('private');
+        
+        // Save the virtual product temporarily
+        $preview_product_id = $preview_product->save();
+        
+        if (!$preview_product_id) {
+            return false;
+        }
+        
+        // Add to cart with special data
+        $preview_cart_key = WC()->cart->add_to_cart(
+            $preview_product_id,
+            1,
+            0,
+            [],
+            [
+                'is_preview_item' => true,
+                'customization_id' => $customization_id,
+                'screenshot_url' => $screenshot_url,
+                'unique_key' => md5('preview_' . $customization_id . microtime())
+            ]
+        );
+        
+        return $preview_cart_key;
+    }
+    
+    /**
+     * Customize preview cart item name with clickable link
+     */
+    public function customize_preview_cart_item_name($product_name, $cart_item, $cart_item_key) {
+        if (isset($cart_item['is_preview_item']) && $cart_item['is_preview_item']) {
+            $screenshot_url = $cart_item['screenshot_url'] ?? '';
+            if ($screenshot_url) {
+                // Create clickable preview link
+                $product_name = sprintf(
+                    '<a href="%s" target="_blank" onclick="window.open(\'%s\', \'preview\', \'width=800,height=600,scrollbars=yes,resizable=yes\'); return false;">%s</a>',
+                    esc_url($screenshot_url),
+                    esc_url($screenshot_url),
+                    __('🔍 View Preview', 'bracelet-customizer')
+                );
+            }
+        }
+        return $product_name;
+    }
+    
+    /**
+     * Hide price for preview items (they're free)
+     */
+    public function hide_preview_item_price($price, $cart_item, $cart_item_key) {
+        if (isset($cart_item['is_preview_item']) && $cart_item['is_preview_item']) {
+            return '<span style="color: #999; font-style: italic;">' . __('Free', 'bracelet-customizer') . '</span>';
+        }
+        return $price;
+    }
+    
+    /**
+     * Cleanup temporary preview product when cart item is removed
+     */
+    public function cleanup_preview_product($cart_item_key) {
+        $cart_item = WC()->cart->get_removed_cart_contents()[$cart_item_key] ?? null;
+        
+        if ($cart_item && isset($cart_item['is_preview_item']) && $cart_item['is_preview_item']) {
+            $product_id = $cart_item['product_id'] ?? 0;
+            if ($product_id) {
+                // Delete the temporary virtual product
+                wp_delete_post($product_id, true);
+            }
+        }
+    }
+    
+    /**
+     * Handle preview items during checkout (prevent them from being ordered)
+     */
+    public function handle_preview_item_checkout($item, $cart_item_key, $values, $order) {
+        if (isset($values['is_preview_item']) && $values['is_preview_item']) {
+            // Remove preview items from the order - they're just for cart display
+            $order->remove_item($item->get_id());
+            
+            // Clean up the temporary product
+            $product_id = $values['product_id'] ?? 0;
+            if ($product_id) {
+                wp_delete_post($product_id, true);
+            }
         }
     }
     
