@@ -3,7 +3,7 @@
  * Plugin Name: Bracelet Customizer
  * Plugin URI: https://fiverr.com/expert2014
  * Description: WooCommerce bracelet customization with React interface. Create custom bracelets with words and charms.
- * Version: 1.0.0
+ * Version: 2.0.0-build
  * Author: Nand Lal
  * Author URI: https://gumnotech.com
  * Text Domain: bracelet-customizer
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('BRACELET_CUSTOMIZER_VERSION', '1.0.0');
+define('BRACELET_CUSTOMIZER_VERSION', '2.0.0');
 define('BRACELET_CUSTOMIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('BRACELET_CUSTOMIZER_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('BRACELET_CUSTOMIZER_PLUGIN_BASENAME', plugin_basename(__FILE__));
@@ -89,6 +89,13 @@ add_action('plugins_loaded', 'bracelet_customizer_init', 20);
  */
 register_activation_hook(__FILE__, 'bracelet_customizer_activate');
 function bracelet_customizer_activate() {
+    // Load textdomain early for activation messages
+    load_plugin_textdomain(
+        'bracelet-customizer',
+        false,
+        dirname(BRACELET_CUSTOMIZER_PLUGIN_BASENAME) . '/languages'
+    );
+    
     // Check dependencies before activation
     if (!bracelet_customizer_check_php_version()) {
         wp_die(__('Bracelet Customizer requires PHP 7.4 or higher.', 'bracelet-customizer'));
@@ -169,7 +176,7 @@ function bracelet_customizer_activation_redirect() {
 /**
  * Load plugin textdomain for translations
  */
-add_action('init', 'bracelet_customizer_load_textdomain');
+add_action('plugins_loaded', 'bracelet_customizer_load_textdomain', 10);
 function bracelet_customizer_load_textdomain() {
     load_plugin_textdomain(
         'bracelet-customizer',
