@@ -256,15 +256,9 @@ class Bracelet_Customizer_WooCommerce {
                     $additional_price += 15; // Gold letters cost $15 extra
                 }
 
-                // Add charm pricing
-                $selected_charms = $customization['selected_charms'] ?? $customization['selectedCharms'] ?? [];
-                foreach ($selected_charms as $charm) {
-                    if (isset($charm['price'])) {
-                        $additional_price += (float) $charm['price'];
-                    }
-                }
+                // Note: Charm pricing removed since charms are now separate products in cart
 
-                // Set the new price
+                // Set the new price only if there are additional costs (e.g., gold letters)
                 if ($additional_price > 0) {
                     $new_price = $base_price + $additional_price;
                     $product->set_price($new_price);
