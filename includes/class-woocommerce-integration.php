@@ -537,15 +537,24 @@ class Bracelet_Customizer_WooCommerce {
      * Generate custom order item thumbnail
      */
     public function custom_order_item_thumbnail($thumbnail, $item, $order) {
-        // Handle different parameter types - sometimes $item is an ID, sometimes an object
-        if (is_numeric($item)) {
-            // $item is an item ID, we need to get the order item object
-            if (is_numeric($order)) {
-                $order = wc_get_order($order);
-            }
-            if (!$order) {
+        // Ensure we have proper objects - different WooCommerce contexts pass different parameter types
+        
+        // Convert order ID to order object if needed
+        if (is_numeric($order)) {
+            $order_obj = wc_get_order($order);
+            if (!$order_obj) {
                 return $thumbnail;
             }
+            $order = $order_obj;
+        }
+        
+        // Handle different item parameter types
+        if (is_numeric($item)) {
+            // $item is an item ID, we need to get the order item object
+            if (!is_object($order) || !method_exists($order, 'get_items')) {
+                return $thumbnail;
+            }
+            
             $order_item = null;
             foreach ($order->get_items() as $order_item_obj) {
                 if ($order_item_obj->get_id() == $item) {
@@ -557,12 +566,6 @@ class Bracelet_Customizer_WooCommerce {
                 return $thumbnail;
             }
             $item = $order_item;
-        } elseif (is_numeric($order)) {
-            // $order is an order ID, convert to object
-            $order = wc_get_order($order);
-            if (!$order) {
-                return $thumbnail;
-            }
         }
         
         // Now $item should be a proper order item object
@@ -601,15 +604,24 @@ class Bracelet_Customizer_WooCommerce {
      * Generate custom email order item thumbnail
      */
     public function custom_email_order_item_thumbnail($thumbnail, $item, $order) {
-        // Handle different parameter types - sometimes $item is an ID, sometimes an object
-        if (is_numeric($item)) {
-            // $item is an item ID, we need to get the order item object
-            if (is_numeric($order)) {
-                $order = wc_get_order($order);
-            }
-            if (!$order) {
+        // Ensure we have proper objects - different WooCommerce contexts pass different parameter types
+        
+        // Convert order ID to order object if needed
+        if (is_numeric($order)) {
+            $order_obj = wc_get_order($order);
+            if (!$order_obj) {
                 return $thumbnail;
             }
+            $order = $order_obj;
+        }
+        
+        // Handle different item parameter types
+        if (is_numeric($item)) {
+            // $item is an item ID, we need to get the order item object
+            if (!is_object($order) || !method_exists($order, 'get_items')) {
+                return $thumbnail;
+            }
+            
             $order_item = null;
             foreach ($order->get_items() as $order_item_obj) {
                 if ($order_item_obj->get_id() == $item) {
@@ -621,12 +633,6 @@ class Bracelet_Customizer_WooCommerce {
                 return $thumbnail;
             }
             $item = $order_item;
-        } elseif (is_numeric($order)) {
-            // $order is an order ID, convert to object
-            $order = wc_get_order($order);
-            if (!$order) {
-                return $thumbnail;
-            }
         }
         
         // Now $item should be a proper order item object
