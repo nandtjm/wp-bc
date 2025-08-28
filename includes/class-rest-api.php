@@ -453,7 +453,7 @@ class Bracelet_Customizer_Rest_API {
             
             $products = get_posts($args);
             $charms = [];
-            
+            $charm_cats = [];
             foreach ($products as $product_post) {
                 $product = wc_get_product($product_post->ID);
                 if (!$product) continue;
@@ -461,6 +461,10 @@ class Bracelet_Customizer_Rest_API {
                 // Get product meta data
                 $charm_id = get_post_meta($product->get_id(), '_charm_id', true) ?: sanitize_title($product->get_name());
                 $category = get_post_meta($product->get_id(), '_charm_category', true) ?: 'bestsellers';
+                if (!isset($charm_cats[$category])) {
+                     $charm_cats[$category] = ucwords(str_replace(['_', '-'], ' ', $category));
+                }
+               
                 $is_new = get_post_meta($product->get_id(), '_is_new', true) === 'yes';
                 
                 // Get main charm image
@@ -534,7 +538,7 @@ class Bracelet_Customizer_Rest_API {
                 'data' => $charms,
                 'source' => $source,
                 'total' => count($charms),
-                'category' => $category
+                'categories' => $charm_cats
             ]);
             
         } catch (Exception $e) {

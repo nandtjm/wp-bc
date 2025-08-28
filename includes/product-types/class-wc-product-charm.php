@@ -196,27 +196,72 @@ class WC_Product_Charm extends WC_Product {
         
         $charm_category = $this->get_charm_category();
         
-        // Direct category match
+        // Direct category match (for slugs)
         if ($charm_category === $category) {
             return true;
         }
         
-        // Special category mappings
+        // Get all categories (default + custom)
+        $all_categories = $this->get_all_charm_categories();
+        
+        // Check if category is a display name, convert to slug
+        $category_slug = $this->get_category_slug_by_name($category, $all_categories);
+        if ($category_slug && $charm_category === $category_slug) {
+            return true;
+        }
+        
+        // Special category mappings for default categories
         switch ($category) {
             case 'Bestsellers':
+            case 'bestsellers':
                 return $this->is_bestseller();
                 
             case 'New Drops & Favs':
+            case 'new_drops':
                 return $this->is_new();
                 
             case 'Personalize it':
+            case 'personalize':
                 return $charm_category === 'personalize';
                 
             case 'By Vibe':
+            case 'by_vibe':
                 return $charm_category === 'by_vibe';
         }
         
         return false;
+    }
+    
+    /**
+     * Get all charm categories (default + custom)
+     * @return array Array of slug => name pairs
+     */
+    private function get_all_charm_categories() {
+        $default_categories = [
+            'bestsellers' => __('Bestsellers', 'bracelet-customizer'),
+            'new_drops' => __('New Drops & Favs', 'bracelet-customizer'),
+            'personalize' => __('Personalize it', 'bracelet-customizer'),
+            'by_vibe' => __('By Vibe', 'bracelet-customizer')
+        ];
+        
+        $custom_categories = get_option('bracelet_customizer_charm_categories', []);
+        
+        return array_merge($default_categories, $custom_categories);
+    }
+    
+    /**
+     * Get category slug by display name
+     * @param string $name Category display name
+     * @param array $categories All categories
+     * @return string|null Category slug or null if not found
+     */
+    private function get_category_slug_by_name($name, $categories) {
+        foreach ($categories as $slug => $display_name) {
+            if ($display_name === $name) {
+                return $slug;
+            }
+        }
+        return null;
     }
     
     /**

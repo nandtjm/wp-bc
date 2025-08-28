@@ -57,6 +57,27 @@ class Bracelet_Customizer_Product_Types {
     }
     
     /**
+     * Get charm categories for select field options
+     * @return array Array of category slug => label pairs
+     */
+    private function get_charm_categories_for_select() {
+        $default_categories = [
+            'bestsellers' => __('Bestsellers', 'bracelet-customizer'),
+            'new_drops' => __('New Drops & Favs', 'bracelet-customizer'),
+            'personalize' => __('Personalize it', 'bracelet-customizer'),
+            'by_vibe' => __('By Vibe', 'bracelet-customizer')
+        ];
+        
+        // Get custom categories from WordPress options
+        $custom_categories = get_option('bracelet_customizer_charm_categories', []);
+        
+        // Merge default and custom categories
+        $categories = array_merge($default_categories, $custom_categories);
+        
+        return $categories;
+    }
+    
+    /**
      * Include custom product classes
      */
     private function include_product_classes() {
@@ -201,12 +222,7 @@ class Bracelet_Customizer_Product_Types {
                     'label' => __('Charm Category', 'bracelet-customizer'),
                     'description' => __('Select the category for this charm.', 'bracelet-customizer'),
                     'desc_tip' => true,
-                    'options' => [
-                        'bestsellers' => __('Bestsellers', 'bracelet-customizer'),
-                        'new_drops' => __('New Drops & Favs', 'bracelet-customizer'),
-                        'personalize' => __('Personalize it', 'bracelet-customizer'),
-                        'by_vibe' => __('By Vibe', 'bracelet-customizer')
-                    ]
+                    'options' => $this->get_charm_categories_for_select()
                 ]);
                 
                 woocommerce_wp_checkbox([
