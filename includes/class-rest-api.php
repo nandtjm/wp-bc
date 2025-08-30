@@ -292,23 +292,23 @@ class Bracelet_Customizer_Rest_API {
                 
                 // Only Standard bracelet products should have main charm data
                 if ($category === 'Standard') {
-                    $main_charm_image_id = get_post_meta($product->get_id(), '_bracelet_main_charm_image', true);
-                    $main_charm_url = get_post_meta($product->get_id(), '_bracelet_main_charm_url', true);
+                    $main_charm_image = get_post_meta($product->get_id(), '_bracelet_base_charm_image', true);
+                    //$main_charm_url = get_post_meta($product->get_id(), '_bracelet_main_charm_url', true);
                     
-                    // Determine the final main charm image URL (URL field takes precedence)
-                    if (!empty($main_charm_url)) {
-                        $main_charm_image = $main_charm_url;
-                    } elseif ($main_charm_image_id) {
-                        $main_charm_image = wp_get_attachment_url($main_charm_image_id);
-                    }
+                    // // Determine the final main charm image URL (URL field takes precedence)
+                    // if (!empty($main_charm_url)) {
+                    //     $main_charm_image = $main_charm_url;
+                    // } elseif ($main_charm_image_id) {
+                    //     $main_charm_image = wp_get_attachment_url($main_charm_image_id);
+                    // }
                     
                     // Store detailed main charm data
-                    $main_charm_data = [
-                        'image_url' => $main_charm_image,
-                        'url_field' => $main_charm_url ?: '',
-                        'uploaded_image_id' => $main_charm_image_id ?: '',
-                        'uploaded_image_url' => $main_charm_image_id ? wp_get_attachment_url($main_charm_image_id) : ''
-                    ];
+                    // $main_charm_data = [
+                    //     'image_url' => $main_charm_image,
+                    //     'url_field' => $main_charm_url ?: '',
+                    //     'uploaded_image_id' => $main_charm_image_id ?: '',
+                    //     'uploaded_image_url' => $main_charm_image_id ? wp_get_attachment_url($main_charm_image_id) : ''
+                    // ];
                     
                     // Get space stone images for all positions and formats
                     for ($position = 1; $position <= 13; $position++) {
@@ -359,7 +359,7 @@ class Bracelet_Customizer_Rest_API {
                     'gapImages' => $gap_images,
                     'gapData' => $gap_data,
                     'mainCharmImage' => $main_charm_image,
-                    'mainCharmData' => $main_charm_data,
+                    //'mainCharmData' => $main_charm_data,
                     'spaceStoneImages' => $space_stone_images,
                     'spaceStoneData' => $space_stone_data,
                     'availableSizes' => $available_sizes,
