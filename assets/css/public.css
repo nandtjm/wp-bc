@@ -75,24 +75,25 @@
 }
 
 .bracelet-customize-btn {
-    background: linear-gradient(135deg, #4F46E5, #6366F1) !important;
+    background: linear-gradient(135deg, #e5b546, #f16e63) !important;
     color: white !important;
     border: none !important;
-    padding: 16px 32px !important;
+    /*padding: 16px 32px !important;*/
     font-size: 16px !important;
-    font-weight: 600 !important;
+    /*font-weight: 600 !important;*/
     border-radius: 8px !important;
     cursor: pointer !important;
     transition: all 0.3s ease !important;
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
     box-shadow: 0 4px 15px rgba(79, 70, 229, 0.3) !important;
-    width: 100% !important;
+    /*width: 100% !important;*/
     max-width: 300px !important;
 }
 
 .bracelet-customize-btn:hover {
-    background: linear-gradient(135deg, #3730A3, #4F46E5) !important;
+    /*background: linear-gradient(135deg, #3730A3, #4F46E5) !important;*/
+    background: #EBBF9A;
     transform: translateY(-2px) !important;
     box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4) !important;
 }
@@ -187,6 +188,18 @@
     background-position: center;
 }
 
+/* Fix on flatsome theme */
+button[id^="bc-"],
+button[class^="bc-"] {
+  all: revert;        /* resets everything to the user agent default */
+  appearance: revert; /* ensure native button look */
+  transition: none;   /* kill any transitions */
+}
+
+button[id^="bc-letter-color-"] {
+	border-radius: 50% !important;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .bracelet-modal-content {
@@ -205,7 +218,7 @@
     
     .bracelet-customize-btn {
         font-size: 14px !important;
-        padding: 14px 24px !important;
+        /*padding: 14px 24px !important;*/
     }
 }
 
@@ -216,6 +229,14 @@
         margin: 0;
         border-radius: 0;
     }
+	.bc-bracelet-preview-container {
+		margin: 0 !important;
+	}
+	
+	.bc-bracelet-preview-container + div {
+		margin-top: 0 !important;
+		font-size: 12px !important;
+	}
 }
 
 /* Accessibility */
@@ -236,7 +257,7 @@
     }
     
     .bracelet-customize-btn {
-        border: 2px solid #fff !important;
+        border: 1px solid #fff !important;
     }
 }
 

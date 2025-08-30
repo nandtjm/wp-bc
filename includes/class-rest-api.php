@@ -469,9 +469,14 @@ class Bracelet_Customizer_Rest_API {
                 
                 // Get main charm image
                 $main_image = '';
-                $main_image_id = get_post_meta($product->get_id(), '_charm_main_image', true);
-                if ($main_image_id) {
-                    $main_image = wp_get_attachment_url($main_image_id);
+                // Use consistent main image fields for all product types
+                $charm_main_url = get_post_meta($product->get_id(), '_product_main_url', true);
+                $charm_main_image_id = get_post_meta($product->get_id(), '_product_main_image', true);
+                
+                if (!empty($charm_main_url)) {
+                    $main_image = $charm_main_url;
+                } elseif ($charm_main_image_id) {
+                    $main_image = wp_get_attachment_url($charm_main_image_id);
                 } else {
                     // Fallback to product featured image
                     $main_image = wp_get_attachment_url($product->get_image_id());
