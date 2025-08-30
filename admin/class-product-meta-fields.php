@@ -153,12 +153,12 @@ class Bracelet_Customizer_Product_Meta_Fields {
         echo '<p class="description">' . __('Upload base charm image that will be overlaid on the bracelet preview. Use WordPress media library or enter external CDN/Cloud URL.', 'bracelet-customizer') . '</p>';
         
         // Get current values
-        $main_charm_image_id = get_post_meta($product_id, '_bracelet_base_charm_image', true);
-        $main_charm_url = get_post_meta($product_id, '_bracelet_base_charm_url', true);
+        $overlay_charm_image_id = get_post_meta($product_id, '_bracelet_overlay_charm_image', true);
+        $overlay_charm_url = get_post_meta($product_id, '_bracelet_overlay_charm_url', true);
         
         // Auto-fill URL if image is uploaded but URL is empty
-        if ($main_charm_image_id && empty($main_charm_url)) {
-            $main_charm_url = wp_get_attachment_url($main_charm_image_id);
+        if ($overlay_charm_image_id && empty($overlay_charm_url)) {
+            $overlay_charm_url = wp_get_attachment_url($overlay_charm_image_id);
         }
         
         echo '<div class="base--charm-image-group" style="border: 1px solid #ddd; padding: 15px; margin-bottom: 15px; border-radius: 5px;">';
@@ -166,16 +166,16 @@ class Bracelet_Customizer_Product_Meta_Fields {
         
         // Image URL field
         woocommerce_wp_text_input([
-            'id' => '_bracelet_base_charm_url',
+            'id' => '_bracelet_overlay_charm_url',
             'label' => __('Base Charm Image URL', 'bracelet-customizer'),
             'description' => __('Image URL (auto-filled when uploaded via WordPress, or enter external CDN/Cloud URL)', 'bracelet-customizer'),
             'desc_tip' => true,
-            'value' => $main_charm_url,
+            'value' => $overlay_charm_url,
             'wrapper_class' => 'form-row form-row-wide',
             'type' => 'url',
             'custom_attributes' => [
                 'placeholder' => 'https://example.com/main-charm.webp',
-                'data-auto-fill-field' => '_bracelet_base_charm_image'
+                'data-auto-fill-field' => '_bracelet_overlay_charm_image'
             ]
         ]);
         
@@ -183,7 +183,7 @@ class Bracelet_Customizer_Product_Meta_Fields {
         
         $this->render_image_field(
                 $product_id, 
-                "_bracelet_base_charm_image", 
+                "_bracelet_overlay_charm_image", 
                 __('Upload Base charm image', 'bracelet-customizer')
             );
         echo '</div>';
@@ -592,7 +592,8 @@ class Bracelet_Customizer_Product_Meta_Fields {
             $this->save_meta_field($product_id, '_bracelet_id');
             $this->save_meta_field($product_id, '_is_best_seller');
             $this->save_meta_field($product_id, '_bracelet_main_image');
-            $this->save_meta_field($product_id, '_bracelet_base_charm_image');
+            $this->save_meta_field($product_id, '_bracelet_overlay_charm_image');
+            $this->save_meta_field($product_id, '_bracelet_overlay_charm_url');
             
             // Save gap images and URLs
             for ($i = 2; $i <= 13; $i++) {
@@ -613,7 +614,7 @@ class Bracelet_Customizer_Product_Meta_Fields {
             
             // Save main charm image and URL
             $this->save_meta_field($product_id, 'f');
-            $this->save_meta_field($product_id, '_bracelet_main_charm_url');
+            $this->save_meta_field($product_id, '_bracelet_overlay_charm_url');
             
             // Auto-fill URL when main charm image is uploaded
             $main_charm_image_id = isset($_POST['_bracelet_main_charm_image']) ? $_POST['_bracelet_main_charm_image'] : '';

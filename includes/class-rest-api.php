@@ -292,15 +292,15 @@ class Bracelet_Customizer_Rest_API {
                 
                 // Only Standard bracelet products should have main charm data
                 if ($category === 'Standard') {
-                    $main_charm_image = get_post_meta($product->get_id(), '_bracelet_base_charm_image', true);
-                    //$main_charm_url = get_post_meta($product->get_id(), '_bracelet_main_charm_url', true);
+                    $main_charm_image_id = get_post_meta($product->get_id(), '_bracelet_overlay_charm_image', true);
+                    $main_charm_url = get_post_meta($product->get_id(), '_bracelet_overlay_charm_url', true);
                     
                     // // Determine the final main charm image URL (URL field takes precedence)
-                    // if (!empty($main_charm_url)) {
-                    //     $main_charm_image = $main_charm_url;
-                    // } elseif ($main_charm_image_id) {
-                    //     $main_charm_image = wp_get_attachment_url($main_charm_image_id);
-                    // }
+                    if (!empty($main_charm_url)) {
+                        $main_charm_image = $main_charm_url;
+                    } elseif ($main_charm_image_id) {
+                        $main_charm_image = wp_get_attachment_url($main_charm_image_id);
+                    }
                     
                     // Store detailed main charm data
                     // $main_charm_data = [
