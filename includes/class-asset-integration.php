@@ -29,7 +29,7 @@ class Bracelet_Customizer_Assets {
      */
     public function enqueue_customizer_assets() {
         $plugin_url = defined('BRACELET_CUSTOMIZER_PLUGIN_URL') ? BRACELET_CUSTOMIZER_PLUGIN_URL : plugin_dir_url(dirname(dirname(__FILE__)));
-        $plugin_version = defined('BRACELET_CUSTOMIZER_VERSION') ? BRACELET_CUSTOMIZER_VERSION : '1.0.0';
+        $plugin_version = defined('BRACELET_CUSTOMIZER_VERSION') ? BRACELET_CUSTOMIZER_VERSION : '2.0.1';
         
         // Enqueue CSS
         wp_enqueue_style(
