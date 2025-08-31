@@ -264,6 +264,20 @@ class Bracelet_Customizer_WooCommerce {
                     $product->set_price($new_price);
                 }
             }
+            
+            // Handle charm pricing from React app data
+            if (isset($cart_item['charm_customization'])) {
+                $charm_data = $cart_item['charm_customization'];
+                $product = $cart_item['data'];
+                
+                // Use the price from React app charm data instead of WordPress product price
+                if (isset($charm_data['price']) && is_numeric($charm_data['price'])) {
+                    $product->set_price($charm_data['price']);
+                    error_log('Setting charm price from React app data: ' . $charm_data['price'] . ' for charm: ' . ($charm_data['name'] ?? 'Unknown'));
+                } else {
+                    error_log('No price found in charm_customization data: ' . print_r($charm_data, true));
+                }
+            }
         }
     }
     
@@ -507,7 +521,17 @@ class Bracelet_Customizer_WooCommerce {
         // Add charms as separate products if selected
         if (isset($customization_data['selectedCharms']) && !empty($customization_data['selectedCharms'])) {
             foreach ($customization_data['selectedCharms'] as $charm) {
-                $charm_product_id = $this->get_charm_product_id($charm['name']);
+                // Use woocommerce_id directly from React app if available
+                $charm_product_id = null;
+                if (isset($charm['woocommerce_id']) && !empty($charm['woocommerce_id'])) {
+                    $charm_product_id = (int) $charm['woocommerce_id'];
+                    error_log('Using WordPress product ID from React app: ' . $charm_product_id . ' for charm: ' . $charm['name']);
+                } else {
+                    // Fallback to lookup method if woocommerce_id not available
+                    $charm_product_id = $this->get_charm_product_id($charm);
+                    error_log('Looked up charm product ID: ' . ($charm_product_id ?: 'NOT_FOUND') . ' for charm: ' . $charm['name']);
+                }
+                
                 if ($charm_product_id) {
                     $charm_cart_key = WC()->cart->add_to_cart(
                         $charm_product_id, 
@@ -523,10 +547,12 @@ class Bracelet_Customizer_WooCommerce {
                     
                     if ($charm_cart_key) {
                         $added_items[] = $charm_cart_key;
-                        error_log('Added charm to cart: ' . $charm['name'] . ' with key: ' . $charm_cart_key);
+                        error_log('Added charm to cart: ' . $charm['name'] . ' (WP ID: ' . $charm_product_id . ') with key: ' . $charm_cart_key);
                     } else {
-                        error_log('Failed to add charm to cart: ' . $charm['name']);
+                        error_log('Failed to add charm to cart: ' . $charm['name'] . ' (WP ID: ' . $charm_product_id . ')');
                     }
+                } else {
+                    error_log('Charm product not found, skipping: ' . $charm['name'] . ' (no valid product ID)');
                 }
             }
         }
@@ -542,68 +568,38 @@ class Bracelet_Customizer_WooCommerce {
     }
     
     /**
-     * Get charm product ID by charm name
+     * Get charm product ID by charm data (fallback method)
+     * This should rarely be used since React app provides woocommerce_id
      */
-    private function get_charm_product_id($charm_name) {
+    private function get_charm_product_id($charm) {
         global $wpdb;
         
-        // First try to find by exact product title
-        $product_id = $wpdb->get_var($wpdb->prepare(
-            "SELECT ID FROM {$wpdb->posts} WHERE post_type = 'product' AND post_status = 'publish' AND post_title = %s LIMIT 1",
-            $charm_name
-        ));
+        $charm_name = $charm['name'] ?? '';
         
-        if ($product_id) {
-            // Verify it's a charm product type
-            $product_type = get_post_meta($product_id, '_product_type', true);
-            if ($product_type === 'charm') {
+        // Try to find by exact product title
+        if ($charm_name) {
+            $product_id = $wpdb->get_var($wpdb->prepare(
+                "SELECT p.ID FROM {$wpdb->posts} p
+                 INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                 WHERE p.post_type = 'product' 
+                 AND p.post_status = 'publish'
+                 AND pm.meta_key = '_product_type' 
+                 AND pm.meta_value = 'charm'
+                 AND p.post_title = %s 
+                 LIMIT 1",
+                $charm_name
+            ));
+            
+            if ($product_id) {
+                error_log('Found charm by exact name: ' . $charm_name . ' -> Product ID: ' . $product_id);
                 return $product_id;
             }
         }
         
-        // Fallback: search by title similarity for charm products
-        $product_id = $wpdb->get_var($wpdb->prepare(
-            "SELECT p.ID FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
-             WHERE p.post_type = 'product' 
-             AND p.post_status = 'publish'
-             AND pm.meta_key = '_product_type' 
-             AND pm.meta_value = 'charm'
-             AND p.post_title LIKE %s 
-             LIMIT 1",
-            '%' . $wpdb->esc_like($charm_name) . '%'
-        ));
-        
-        // If still not found, create a simple charm product dynamically
-        if (!$product_id) {
-            $product_id = $this->create_charm_product($charm_name);
-        }
-        
-        return $product_id;
+        error_log('Charm product not found for: ' . $charm_name . '. React app should provide woocommerce_id.');
+        return null;
     }
     
-    /**
-     * Create a simple charm product if one doesn't exist
-     */
-    private function create_charm_product($charm_name) {
-        $product = new WC_Product_Simple();
-        $product->set_name($charm_name);
-        $product->set_description(sprintf(__('Charm: %s', 'bracelet-customizer'), $charm_name));
-        $product->set_short_description(__('Custom Bracelet Charm', 'bracelet-customizer'));
-        $product->set_price(14); // Default charm price
-        $product->set_regular_price(14);
-        $product->set_catalog_visibility('hidden');
-        $product->set_virtual(true);
-        
-        $product_id = $product->save();
-        
-        if ($product_id) {
-            // Set product type as charm
-            update_post_meta($product_id, '_product_type', 'charm');
-        }
-        
-        return $product_id;
-    }
     
     
     /**

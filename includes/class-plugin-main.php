@@ -328,7 +328,7 @@ class Bracelet_Customizer_Main {
     private function enqueue_react_app() {
         $build_path = BRACELET_CUSTOMIZER_PLUGIN_PATH . 'bracelet-customizer/build';
         $build_url = BRACELET_CUSTOMIZER_PLUGIN_URL . 'bracelet-customizer/build';
-        
+        return;
         // Check if build exists
         if (!file_exists($build_path)) {
             return;
@@ -623,39 +623,81 @@ class Bracelet_Customizer_Main {
             error_log("Created sample bracelet product: ID {$bracelet_id}");
         }
         
-        // Create sample charm product
-        $charm = new WC_Product_Simple();
-        $charm->set_name(__('Apple Charm', 'bracelet-customizer'));
-        $charm->set_regular_price(14.00);
-        $charm->set_description(__('A beautiful apple charm to add to your bracelet.', 'bracelet-customizer'));
-        $charm->set_short_description(__('Golden apple charm', 'bracelet-customizer'));
-        $charm->set_manage_stock(false);
-        $charm->set_stock_status('instock');
-        $charm->set_catalog_visibility('visible');
-        $charm->set_status('publish');
+        // Create charm products from mock data
+        self::create_charm_products();
+    }
+    
+    /**
+     * Create charm products from mock data
+     */
+    private static function create_charm_products() {
+        // Check if charm products already exist
+        $existing_charms = get_posts([
+            'post_type' => 'product',
+            'meta_query' => [
+                [
+                    'key' => '_product_type',
+                    'value' => 'charm'
+                ]
+            ],
+            'posts_per_page' => 1
+        ]);
         
-        $charm_id = $charm->save();
-        
-        if ($charm_id) {
-            // Set as sample product
-            update_post_meta($charm_id, '_charm_sample_product', 'yes');
-            
-            // Set product type
-            wp_set_object_terms($charm_id, 'charm', 'product_type');
-            
-            // Add charm meta
-            update_post_meta($charm_id, '_charm_category', 'bestsellers');
-            update_post_meta($charm_id, '_charm_is_new', 'no');
-            
-            // Sample position images
-            $position_images = [];
-            for ($i = 1; $i <= 9; $i++) {
-                $position_images[$i] = BRACELET_CUSTOMIZER_PLUGIN_URL . "assets/images/apple-pos-{$i}.jpg";
-            }
-            update_post_meta($charm_id, '_charm_position_images', $position_images);
-            
-            error_log("Created sample charm product: ID {$charm_id}");
+        if (!empty($existing_charms)) {
+            error_log('Charm products already exist, skipping creation');
+            return; // Charm products already exist
         }
+        
+        // Read mock data
+        $mock_data_path = BRACELET_CUSTOMIZER_PLUGIN_PATH . 'bracelet-customizer/src/data/mockData.json';
+        if (!file_exists($mock_data_path)) {
+            error_log('Mock data file not found: ' . $mock_data_path);
+            return;
+        }
+        
+        $mock_data = json_decode(file_get_contents($mock_data_path), true);
+        if (!$mock_data || !isset($mock_data['charms'])) {
+            error_log('Invalid mock data or no charms found');
+            return;
+        }
+        
+        $created_count = 0;
+        
+        foreach ($mock_data['charms'] as $charm_data) {
+            // Create charm product
+            $charm = new WC_Product_Simple();
+            $charm->set_name($charm_data['name']);
+            $charm->set_regular_price($charm_data['price']);
+            $charm->set_description($charm_data['description'] ?? '');
+            $charm->set_short_description($charm_data['description'] ?? '');
+            $charm->set_manage_stock(false);
+            $charm->set_stock_status('instock');
+            $charm->set_catalog_visibility('hidden'); // Hidden from catalog
+            $charm->set_status('publish');
+            
+            $charm_id = $charm->save();
+            
+            if ($charm_id) {
+                // Set product type as charm
+                wp_set_object_terms($charm_id, 'charm', 'product_type');
+                update_post_meta($charm_id, '_product_type', 'charm');
+                
+                // Add charm meta data
+                update_post_meta($charm_id, '_charm_category', $charm_data['category'] ?? 'bestsellers');
+                update_post_meta($charm_id, '_charm_is_new', $charm_data['isNew'] ? 'yes' : 'no');
+                update_post_meta($charm_id, '_charm_original_id', $charm_data['id']);
+                
+                // Set charm as auto-created
+                update_post_meta($charm_id, '_charm_auto_created', 'yes');
+                
+                $created_count++;
+                error_log("Created charm product: {$charm_data['name']} (ID: {$charm_id}, Price: {$charm_data['price']})");
+            } else {
+                error_log("Failed to create charm product: {$charm_data['name']}");
+            }
+        }
+        
+        error_log("Created {$created_count} charm products during plugin activation");
     }
     
     /**

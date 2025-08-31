@@ -3,7 +3,7 @@
  * Plugin Name: Bracelet Customizer
  * Plugin URI: https://fiverr.com/expert2014
  * Description: WooCommerce bracelet customization with React interface. Create custom bracelets with words and charms.
- * Version: 2.0.0-build
+ * Version: 2.0.1-build
  * Author: Nand Lal
  * Author URI: https://gumnotech.com
  * Text Domain: bracelet-customizer
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('BRACELET_CUSTOMIZER_VERSION', '2.0.0');
+define('BRACELET_CUSTOMIZER_VERSION', '2.0.1');
 define('BRACELET_CUSTOMIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('BRACELET_CUSTOMIZER_PLUGIN_PATH', plugin_dir_path(__FILE__));
 define('BRACELET_CUSTOMIZER_PLUGIN_BASENAME', plugin_basename(__FILE__));
